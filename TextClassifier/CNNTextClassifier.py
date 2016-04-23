@@ -471,15 +471,15 @@ class CNNTextClassifier(BaseEstimator):
                   % (epoch, float(self.score(x_train[0:500], y_train[0:500])))
 
             indices = rng.permutation(n_train_samples)
-            for i, idx in enumerate(indices):
+            for idx, real_idx in enumerate(indices):
                 # Если матрица пустая - тут пропускаю
-                if x_train_matrix[idx] is None:
+                if x_train_matrix[real_idx] is None:
                     continue
-                x_current_input = x_train_matrix[idx].reshape(1, 1, x_train_matrix[idx].shape[0],
-                                                              x_train_matrix[idx].shape[1])
-                cost_ij = self.train_model(x_current_input, y_train[idx])
+                x_current_input = x_train_matrix[real_idx].reshape(1, 1, x_train_matrix[real_idx].shape[0],
+                                                              x_train_matrix[real_idx].shape[1])
+                cost_ij = self.train_model(x_current_input, y_train[real_idx])
 
-                if i % visualization_frequency == 0 and i > 0:
+                if idx % visualization_frequency == 0 and idx > 0:
                     # print "train cost_ij = ", cost_ij
                     if interactive:
                         test_losses = [self.compute_error(x_test_matrix[i].reshape(1, 1,
@@ -502,7 +502,7 @@ class CNNTextClassifier(BaseEstimator):
                         print self.score(x_train, y_train)
                         print "cost_ij = ", cost_ij
                         print "epoch %d, review %d: this train losses: %f"\
-                              % (epoch, idx, float(this_train_loss))
+                              % (epoch, real_idx, float(this_train_loss))
 
         print "Fitting was finished. Test score:"
         print self.score(x_test, y_test)

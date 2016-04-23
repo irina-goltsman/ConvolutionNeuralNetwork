@@ -16,7 +16,7 @@ sys.path.insert(0, '..')
 import CNNTextClassifier
 
 
-def simple_load_and_test():
+def simple_load_and_test(path_to_model):
     print "Loading data..."
     test_data = pd.read_csv("../data/testData.tsv",
                             header=0, delimiter="\t", quoting=3)
@@ -34,9 +34,9 @@ def simple_load_and_test():
         else:
             print "bad change!"
 
-    classifier = CNNTextClassifier.CNNTextClassifier(model_path="./models/100features_40minwords_10context")
+    classifier = CNNTextClassifier.CNNTextClassifier(model_path="../models/100features_40minwords_10context")
     print "Loading state for classifier..."
-    classifier.load("../models/cnn_state_last")
+    classifier.load(path_to_model)
 
     print "Prediction..."
     result = classifier.predict(test_data["review"])
@@ -104,6 +104,6 @@ def to_train():
 
 if __name__ == '__main__':
     start_time = time.time()
-    to_train()
-    #simple_load_and_test()
+    #to_train()
+    simple_load_and_test('../models/cnn_state_20160424010747')
     print("--- %s seconds ---" % (time.time() - start_time))

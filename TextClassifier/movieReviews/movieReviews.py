@@ -7,6 +7,7 @@ import datetime
 import numpy as np
 import pandas as pd
 from bs4 import BeautifulSoup
+from sklearn.cross_validation import KFold
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s',
                     level=logging.INFO)
@@ -48,7 +49,7 @@ def simple_load_and_test(path_to_model):
     output.to_csv(new_state_path, index=False, quoting=3)
 
 
-def to_train():
+def to_train(path_to_model=None):
     print "Loading data..."
     train = pd.read_csv("../data/labeledTrainData.tsv",
                         header=0, delimiter="\t", quoting=3)
@@ -62,7 +63,7 @@ def to_train():
     print "number of samples = %d" % max_count
     train = train[0:max_count]
 
-    train_length = int(max_count * 0.98)
+    train_length = int(max_count * 0.90)
     print "Length of train data == %d" % (train_length)
     print "Length of valid data == %d" % (max_count - train_length)
 
@@ -73,15 +74,15 @@ def to_train():
             train["review"][i] = review_text
         else:
             print "bad change!"
-
-    classifier = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0.1, window=5, n_filters=15,
+    #TODO: попробуй 50 фильтров
+    classifier = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0, window=6, n_filters=50,
+                                                     k_max=1, activation='iden',
+                                                     word_dimension=100,
                                                      model_path="../models/100features_40minwords_10context")
-
-    #classifier = TextClassifier.TextClassifier(word_dimension=400,
-    #                                           model_path="../word2vec.model")
-    #classifier.ready()
-    #print "Loading state for classifier..."
-    #classifier.load("cnn_state_last")
+                                                     #model_path="../models/GoogleNews-vectors-negative300.bin")
+    if path_to_model:
+        print "Loading state for classifier..."
+        classifier.load(path_to_model)
 
     y_train = np.array(train["sentiment"][0:train_length], dtype='int32')
     x_train = np.array(train["review"][0:train_length])
@@ -91,19 +92,82 @@ def to_train():
 
     print "Fitting a cnn to labeled training data..."
     try:
-        classifier.fit(x_train, y_train, x_valid, y_valid, n_epochs=13)
+        classifier.fit(x_train, y_train, x_valid, y_valid, n_epochs=30)
     except:
         new_state_path = "../models/cnn_state_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
         print "Saving state to '%s'..." % new_state_path
         classifier.save_state(new_state_path)
         raise
 
-    new_state_path = "../models/cnn_state_" + datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+    new_state_path = "../models/cnn_state_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
     print "Saving state to '%s'..." % new_state_path
     classifier.save_state(new_state_path)
+    return new_state_path
+
+
+def train_and_test_cross_folds(max_count=None):
+    print "Loading data..."
+    train = pd.read_csv("../data/labeledTrainData.tsv",
+                        header=0, delimiter="\t", quoting=3)
+
+    print "size of train data = %d" % (train.shape[0])
+
+    if not max_count:
+        max_count = train.shape[0]
+    print "number of samples = %d" % max_count
+
+    train = train[0:max_count]
+
+    print "Translating reviews to raw text format..."
+    for i in xrange(max_count):
+        review_text = BeautifulSoup(train["review"][i], "lxml").get_text()
+        if review_text != '':
+            train["review"][i] = review_text
+        else:
+            print "bad change!"
+
+    n_folds = 10
+
+    kf = KFold(max_count, n_folds=n_folds, shuffle=True, random_state=0)
+    results = []
+    for num, (train_index, test_index) in enumerate(kf):
+        print "num of fold = %d" % num
+        X_train = train["review"][train_index].reset_index(drop=True)
+        X_test = train["review"][test_index].reset_index(drop=True)
+        y_train = train["sentiment"][train_index].reset_index(drop=True)
+        y_test = train["sentiment"][test_index].reset_index(drop=True)
+
+        classifier = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0, window=5, n_filters=50,
+                                                         k_max=1, activation='iden',
+                                                         word_dimension=100,
+                                                         model_path="../models/100features_40minwords_10context")
+
+        print "Fitting a cnn to labeled training data..."
+        try:
+            classifier.fit(X_train, y_train, X_test, y_test, n_epochs=30)
+        except:
+            new_state_path = "../models/cnn_state_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')\
+                             + '_' + str(num)
+            print "Saving state to '%s'..." % new_state_path
+            classifier.save_state(new_state_path)
+            raise
+
+        new_state_path = "../models/cnn_state_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')\
+                         + '_' + str(num)
+        print "Saving state to '%s'..." % new_state_path
+        classifier.save_state(new_state_path)
+
+        score = classifier.score(X_test, y_test)
+        print "--------FOLD_NUM = %d, TEST SCORE = %f-----------" % (num, score)
+        results.append(score)
+    print "-----------------------------------------------------"
+    print "-------------MEAN TEST SCORE = %f---------------" % np.mean(results)
+    print "-----------------------------------------------------"
 
 if __name__ == '__main__':
     start_time = time.time()
-    #to_train()
-    simple_load_and_test('../models/cnn_state_20160424010747')
+    train_and_test_cross_folds(max_count=5000)
+    #new_state_path = to_train()
+    #simple_load_and_test('../models/' + new_state_path)
+    #simple_load_and_test('../models/cnn_state_2016-05-08-22:13:01')
     print("--- %s seconds ---" % (time.time() - start_time))

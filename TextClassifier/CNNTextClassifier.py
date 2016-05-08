@@ -40,6 +40,8 @@ class ConvLayerForSentences(object):
                                  ширина изображения = размерность вектора слова)
 
         :param activation: активационная функция
+
+        # Записывает в self.output 4D тензор, размера: (batch size (1), nfilters, output row, output col)
         """
         if sentences_shape is not None:
             # проверяю совпадение размерности вектора слова
@@ -52,12 +54,12 @@ class ConvLayerForSentences(object):
         self.W = theano.shared(
             numpy.asarray(rng.uniform(low=-W_bound, high=W_bound,
                                       size=filter_shape),
-                          dtype=theano.config.floatX
-                          ),
+                          dtype=theano.config.floatX),
             borrow=True
         )
 
         # символическое выражение, выполняющее операцию свёртки с помощью фильтров
+        # Возвращает 4D тензор, размера: (batch size (1), nfilters, output row, output col)
         conv_out = conv.conv2d(
             input=input_data,
             filters=self.W,
@@ -79,19 +81,47 @@ class ConvLayerForSentences(object):
 
 
 class MaxOverTimePoolingLayer(object):
-    def __init__(self, pooling_input, n_filters):
+    def __init__(self, pooling_input):
         """
         Записывет максимальные значения по оси, отвечающей результату одного фильтра
         Один максимум для одного фильтра - для простейшего варианта - ширина фильтра =
         размерности слова
         :type pooling_input: символичный тензор размера 2:
-                            (количество входных карт признаков(число фильтров) *
-                            высота - итоговое количество окон предложения для одного фильтра)
+                            (количество входных карт признаков(число фильтров),
+                             output row * output col(1) * batch size (1)
+                             (output row = высота - итоговое количество окон предложения для одного фильтра))
         :param pooling_input: вход для пулинга
         """
         max_args = T.argmax(pooling_input, axis=1)
-        output = pooling_input[xrange(n_filters), max_args]
-        self.output = output.flatten(1)
+        n_filters = pooling_input.shape[0]
+        self.output = pooling_input[T.arange(n_filters), max_args]
+        self.output = self.output.reshape((n_filters, 1))
+
+
+class KMaxPoolingLayer(object):
+    def __init__(self, pooling_input, k):
+        """
+        Записывает в self.output k максимальных значений входа
+        :param pooling_input: символичный тензор размера 2:
+                              (количество входных карт признаков(число фильтров),
+                              output row * output col(1) * batch size (1)
+                              (output row = высота - итоговое количество окон предложения для одного фильтра))
+        :param k: int, количество максимальных элементов
+        В self.output записывается тензор размера 2: (количество входных карт признаков(число фильтров),
+                                                      k максимальных значений по каждому фильтру без потери порядка)
+        """
+        # axis=1 так как нам нужна сортировка внутри каждого фильтра (т.е внутри строк каждой матрицы)
+        pooling_args_sorted = T.argsort(pooling_input, axis=1)
+        args_of_k_max = pooling_args_sorted[:, -k:]
+        # не хочу терять порядок слов, поэтому ещё раз сортирую номера максимумов:
+        args_of_k_max_sorted = T.sort(args_of_k_max, axis=1)
+
+        n_filters = pooling_input.shape[0]
+
+        ii = T.repeat(T.arange(n_filters), k)
+        jj = args_of_k_max_sorted.flatten()
+
+        self.output = pooling_input[ii, jj].reshape((n_filters, k))
 
 
 class FullyConnectedLayer(object):
@@ -189,25 +219,13 @@ class SoftmaxLayer(object):
         # self.p_y_given_x - вектор принадлежности к каждому классу
         return -T.log(self.p_y_given_x)[y]
 
+def ReLU(x):
+    y = T.maximum(0.0, x)
+    return(y)
 
-class KMaxPoolingLayer(object):
-    def __init__(self, pooling_input, k):
-        """
-        Записывает в self.output k максимальных значений входа
-        :param pooling_input:  символичный тензор для пулинга
-
-        :param k: int, количество максимальных элементов
-        """
-        # axis=1 так как нам нужна сортировка строк, а не столбцов
-        pooling_args_sorted = T.argsort(pooling_input, axis=1)
-        args_of_k_max = pooling_args_sorted[:, -k:]
-        # axis=1 так как мы сортируем стоку
-        args_of_k_max_sorted = T.sort(args_of_k_max, axis=1)
-        # TODO: check it!
-        ii = T.repeat(T.arange(pooling_input.shape[0], 'int64'), k)
-        jj = args_of_k_max_sorted.flatten()
-
-        self.output = pooling_input[ii, jj]
+def Iden(x):
+    y = x
+    return(y)
 
 
 class CNNForSentences(object):
@@ -215,7 +233,7 @@ class CNNForSentences(object):
     Свёрточная сеть с одним свёрточным слоем
     """
     def __init__(self, input, n_out, n_hidden,
-                 n_filters, window, word_dimension, activation=T.tanh, seed=0):
+                 n_filters, n_chanels, window, word_dimension, activation=T.tanh, seed=0, k_max=1):
         """
         :type input: theano.tensor.dtensor4
         :param input: символичный тензор предложений формата:
@@ -226,6 +244,7 @@ class CNNForSentences(object):
         :param n_out: количество целевых классов классификации
         :param n_hidden:  число нейронов скрытого полносвязного слоя
         :param n_filters: число фильтров свёртки
+        :param n_chanels: число входных каналов
         :param window: размер окна для фильтров
         :param activation: активационная функция
         :param seed: начальное значение для генератора случайных чисел
@@ -235,16 +254,23 @@ class CNNForSentences(object):
         rng = numpy.random.RandomState(seed)
         # assert word_dimension == input.shape[3]
 
-        self.layer0 = ConvLayerForSentences(rng, input_data=input, filter_shape=(n_filters, 1,
+        self.layer0 = ConvLayerForSentences(rng, input_data=input, filter_shape=(n_filters, n_chanels,
                                                                                  window,
                                                                                  word_dimension))
+        # Записывает в self.output 4D тензор, размера: (batch size (1), nfilters, output row, output col(1))
+        # output col == 1, т.к. ширина фильтра = word_dimension (ширине изображения)
+        # Меняю форму, на: (nfilters, output row, output col, batch size (1))
         layer1_input = self.layer0.output.dimshuffle(1, 2, 0, 3)
+        # Меняю форму на: ( nfilters, output row * output col(1) * batch size(1) )
         layer1_input = layer1_input.flatten(2)
-        # TODO: check it!
-        self.layer1 = MaxOverTimePoolingLayer(layer1_input, n_filters)
-        layer2_input = self.layer1.output
-        # После этого слоя осталось ровно n_filters элементов
-        self.layer2 = FullyConnectedLayer(rng, layer2_input, n_in=n_filters,
+
+        if k_max == 1:
+            self.layer1 = MaxOverTimePoolingLayer(layer1_input)
+        else:
+            self.layer1 = KMaxPoolingLayer(layer1_input, k_max)
+        layer2_input = self.layer1.output.flatten(1)
+        # После этого слоя осталось ровно n_filters * k элементов
+        self.layer2 = FullyConnectedLayer(rng, layer2_input, n_in=n_filters * k_max,
                                           n_out=n_hidden, activation=activation)
 
         # classify the values of the fully-connected sigmoidal layer
@@ -308,7 +334,7 @@ class CNNTextClassifier(BaseEstimator):
     def __init__(self, learning_rate=0.1, n_epochs=3, activation='tanh', window=5,
                  n_hidden=10, n_filters=25, pooling_type='max_overtime',
                  L1_reg=0.00, L2_reg=0.00, n_out=2, word_dimension=100,
-                 seed=0, model_path=None):
+                 seed=0, model_path=None, k_max=1):
         """
         :param learning_rate: темп обучения
         :param n_epochs: количество эпох обучения
@@ -341,17 +367,13 @@ class CNNTextClassifier(BaseEstimator):
         self.seed = seed
         self.is_ready = False
         self.model_path = model_path
+        self.k_max = k_max
 
-        if model_path is None:
-            if word_dimension == 100:
-                self.model_path = "100features_40minwords_10context"
-            elif word_dimension == 400:
-                self.model_path = "word2vec.model"
-            else:
-                print "There is no prepared model with dimension = %d" % word_dimension
-                return
         print "Model word2vec is loading from %s." % self.model_path
-        self.model = Word2Vec.load(self.model_path)
+        try:
+            self.model = Word2Vec.load_word2vec_format(self.model_path, binary=True)
+        except UnicodeDecodeError:
+            self.model = Word2Vec.load(self.model_path)
         print "Model word2vec was loaded."
         assert self.model.layer1_size == self.word_dimension
 
@@ -377,8 +399,8 @@ class CNNTextClassifier(BaseEstimator):
 
         self.cnn = CNNForSentences(input=self.x,
                        n_out=self.n_out, activation=activation,
-                       n_hidden=self.n_hidden, n_filters=self.n_filters, window=self.window,
-                       word_dimension=self.word_dimension, seed=self.seed)
+                       n_hidden=self.n_hidden, n_filters=self.n_filters, n_chanels=1, window=self.window,
+                       word_dimension=self.word_dimension, seed=self.seed, k_max=self.k_max)
 
         #self.cnn.predict expects one input.
         #we wrap those functions and pad as necessary in 'def predict' and 'def predict_proba'
@@ -615,10 +637,11 @@ class CNNTextClassifier(BaseEstimator):
             matrix = text_to_matrix(text, self.model)
             if matrix is None:
                 print "Warning: {0}: '{1}' hasn't meaningful words!".format(i, text)
-            elif matrix.shape[0] < self.window:
-                print "Warning: {0} sentence's length ({1}) is less then window ({2})".format(i, matrix.shape[0],
-                                                                                              self.window)
+            elif matrix.shape[0] < self.window + self.k_max - 1:
+                print "Warning: {0} sentence's length ({1}) is less then window + k_max - 1 ({2})"\
+                    .format(i, matrix.shape[0], self.window + self.k_max - 1)
                 print "sentence: {}".format(text)
+                continue
             text_data_as_matrix.append(matrix)
         return numpy.asarray(text_data_as_matrix)
 

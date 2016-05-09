@@ -334,8 +334,8 @@ class CNNTextClassifier(BaseEstimator):
 
     def __init__(self, learning_rate=0.1, n_epochs=3, activation='tanh', window=5,
                  n_hidden=10, n_filters=25, pooling_type='max_overtime',
-                 L1_reg=0.00, L2_reg=0.00, n_out=2, word_dimension=100,
-                 seed=0, model_path=None, k_max=1):
+                 L1_reg=0.00, L2_reg=0.00, n_out=2, seed=0, k_max=1, word_dimension=100,
+                 model_path="../models/100features_40minwords_10context"):
         """
         :param learning_rate: темп обучения
         :param n_epochs: количество эпох обучения
@@ -351,8 +351,7 @@ class CNNTextClassifier(BaseEstimator):
         :param word_dimension: размерность слов
         :param seed: начальное значение для генератора случайных чисел
         :type model_path: string / None
-        :param model_path: путь к сохранённой модели word2vec, если путь не указан, используется
-                        стандартная предобученная модель
+        :param model_path: путь к сохранённой модели векторного представления слов
         """
         self.learning_rate = learning_rate
         self.n_hidden = n_hidden
@@ -370,12 +369,12 @@ class CNNTextClassifier(BaseEstimator):
         self.model_path = model_path
         self.k_max = k_max
 
-        print "Model word2vec is loading from %s." % self.model_path
+        print "Word embedding model is loading from %s." % self.model_path
         try:
             self.model = Word2Vec.load_word2vec_format(self.model_path, binary=True)
         except UnicodeDecodeError:
             self.model = Word2Vec.load(self.model_path)
-        print "Model word2vec was loaded."
+        print "Word embedding model has been loaded."
         assert self.model.layer1_size == self.word_dimension
 
     def ready(self):
@@ -428,7 +427,8 @@ class CNNTextClassifier(BaseEstimator):
         """
         return numpy.mean(self.predict(x_data) == y)
 
-    def fit(self, x_train, y_train, x_test=None, y_test=None, n_epochs=None):
+    def fit(self, x_train, y_train, x_test=None, y_test=None, n_epochs=None, validation_part=0.1,
+            visualization_frequency=5000):
         """ Fit model
 
         Pass in X_test, Y_test to compute test error and report during
@@ -440,19 +440,33 @@ class CNNTextClassifier(BaseEstimator):
 
         :type n_epochs: int/None
         :param n_epochs: used to override self.n_epochs from init.
+        :type validation_part: float
+        :param validation_part: доля тренеровочных данных, которые станут валидационной выборкой
+        :type visualization_frequency: int/None
+        :param visualization_frequency: если не None, то каждые visualization_frequency интераций
+                                        будет выводиться результат модели на валидационной выборке
         """
         assert max(y_train) < self.n_out
         assert min(y_train) >= 0
         assert len(x_train) == len(y_train)
+
+        n_valid_samples = int(len(x_train) * validation_part)
+        x_valid = x_train[-n_valid_samples:]
+        y_valid = y_train[-n_valid_samples:]
+        x_train = x_train[0:n_valid_samples]
+        y_train = y_train[0:n_valid_samples]
+
         print "Feature selection..."
         x_train_matrix = self.__feature_selection(x_train)
+        x_valid_matrix = self.__feature_selection(x_valid)
+        n_train_samples = x_train_matrix.shape[0]
+        n_valid_samples = x_valid_matrix.shape[0]
+
         if x_test is not None:
-            assert(y_test is not None)
             assert len(x_test) == len(y_test)
-            interactive = True
             x_test_matrix = self.__feature_selection(x_test)
-        else:
-            interactive = False
+            n_test_samples = x_test_matrix.shape[0]
+
         print "Feature selection finished"
 
         # подготовим CNN
@@ -481,67 +495,63 @@ class CNNTextClassifier(BaseEstimator):
         if n_epochs is None:
             n_epochs = self.n_epochs
 
-        n_train_samples = x_train_matrix.shape[0]
-        if interactive:
-            n_test_samples = x_test_matrix.shape[0]
-
         rng = numpy.random.RandomState(self.seed)
-        visualization_frequency = min(5000, n_train_samples - 1)
+        visualization_frequency = min(visualization_frequency, n_train_samples - 1)
         epoch = 0
+        best_valid_score, best_epoch_num = 0, 0
+        mean_test_loss, test_score = None, None
         while epoch < n_epochs:
             epoch += 1
-            # compute loss on training set
-            print "start epoch %d: this TRAIN 500 SCORE: %f"\
-                  % (epoch, float(self.score(x_train[0:500], y_train[0:500])))
+            print "start epoch %d: this valid score: %f" % (epoch, float(self.score(x_valid_matrix, y_valid)))
 
             indices = rng.permutation(n_train_samples)
-            for idx, real_idx in enumerate(indices):
+            for cur_idx, real_idx in enumerate(indices):
                 # Если матрица пустая - тут пропускаю
                 if x_train_matrix[real_idx] is None:
                     continue
                 x_current_input = x_train_matrix[real_idx].reshape(1, 1, x_train_matrix[real_idx].shape[0],
                                                               x_train_matrix[real_idx].shape[1])
-                cost_ij = self.train_model(x_current_input, y_train[real_idx])
+                train_cost = self.train_model(x_current_input, y_train[real_idx])
 
-                if idx % visualization_frequency == 0 and idx > 0:
-                    # print "train cost_ij = ", cost_ij
-                    if interactive:
-                        test_losses = [self.compute_error(x_test_matrix[i].reshape(1, 1,
-                                                                                   x_test_matrix[i]
-                                                                                   .shape[0],
-                                                          x_test_matrix[i].shape[1]), y_test[i])
-                                       for i in xrange(n_test_samples) if x_test_matrix[i] is not None]
-                        this_test_loss = numpy.mean(test_losses)
-                        print "epoch %d, review %d: this test losses(score): %f, this TEST MEAN " \
-                              "SCORE: %f" % (epoch, idx, float(this_test_loss),
-                                             float(self.score(x_test, y_test)))
+                if cur_idx % visualization_frequency == 0 and cur_idx > 0:
+                    valid_losses = [self.compute_error(X.reshape(1, 1, X.shape[0], X.shape[1]), y)
+                                   for X, y in zip(x_valid_matrix, y_valid) if X is not None]
+                    mean_valid_loss = numpy.mean(valid_losses)
+                    print "epoch %d, review %d: this mean valid losses: %f, this mean valid score: %f" \
+                          % (epoch, cur_idx, float(mean_valid_loss), self.score(x_valid_matrix, y_valid))
+                    print "current train cost: %f" % train_cost
+            current_valid_score = float(self.score(x_valid_matrix, y_valid))
+            print "end of epoch %d: this valid score: %f" % (epoch, current_valid_score)
+            if current_valid_score > best_valid_score:
+                print "NEW BEST VALID SCORE: %f" % current_valid_score
+                best_valid_score = current_valid_score
+                best_epoch_num = epoch
+                if x_test is not None:
+                    test_losses = [self.compute_error(X.reshape(1, 1, X.shape[0], X.shape[1]), y)
+                                    for X, y in zip(x_test_matrix, y_test) if X is not None]
+                    mean_test_loss = numpy.mean(test_losses)
+                    test_score =  self.score(x_test_matrix, y_test)
+                    print "epoch %d: this mean TEST LOSSES: %f, this MEAN TEST SCORE: %f" \
+                          % (epoch, float(mean_test_loss), test_score)
 
-                    else:
-                        # compute loss on training set
-                        train_losses = [self.compute_error(x_train_matrix[i].reshape(1, 1,
-                                                                                     x_train_matrix[i].shape[0],
-                                                                                     x_train_matrix[i].shape[1]),
-                                                           y_train[i])
-                                        for i in xrange(n_train_samples)]
-                        this_train_loss = numpy.mean(train_losses)
-                        print self.score(x_train, y_train)
-                        print "cost_ij = ", cost_ij
-                        print "epoch %d, review %d: this train losses: %f"\
-                              % (epoch, real_idx, float(this_train_loss))
-
-        print "Fitting was finished. Test score:"
-        print self.score(x_test, y_test)
+        print "Fitting was finished."
+        print "Train score: %f" % self.score(x_train_matrix, y_train)
+        print "Valid score: %f" % self.score(x_valid_matrix, y_valid)
+        print "Best valid score: %f" % best_valid_score
+        print "Best number of epoch: %d" % best_epoch_num
+        if x_test is not None:
+            print "TEST LOSSES of best valid score: %f" % mean_test_loss
+            print "TEST SCORE of best valid score: %f" % test_score
+            return (mean_test_loss, test_score)
 
     def predict(self, data):
         if isinstance(data[0], str) or isinstance(data[0], unicode):
             matrix_data = self.__feature_selection(data)
         else:
-            print type(data[0])
             matrix_data = data
         if isinstance(matrix_data, list) or isinstance(matrix_data, numpy.matrix):
             matrix_data = numpy.array(matrix_data)
-        return [self.predict_wrap(matrix_data[i].reshape(1, 1, matrix_data[i].shape[0],
-                                  matrix_data[i].shape[1])) for i in xrange(matrix_data.shape[0])]
+        return [self.predict_wrap(X.reshape(1, 1, X.shape[0], X.shape[1])) for X in matrix_data]
 
     def predict_proba(self, data):
         if isinstance(data[0], str):
@@ -550,8 +560,7 @@ class CNNTextClassifier(BaseEstimator):
             matrix_data = data
         if isinstance(matrix_data, list) or isinstance(matrix_data, numpy.matrix):
             matrix_data = numpy.array(matrix_data)
-        return [self.predict_proba_wrap(matrix_data[i].reshape(1, 1, matrix_data[i].shape[0],
-                                        matrix_data[i].shape[1])) for i in xrange(matrix_data.shape[0])]
+        return [self.predict_proba_wrap(X.reshape(1, 1, X.shape[0], X.shape[1])) for X in matrix_data]
 
     def __getstate__(self):
         """ Return state sequence."""

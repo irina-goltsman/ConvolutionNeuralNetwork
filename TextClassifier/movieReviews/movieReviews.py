@@ -35,7 +35,7 @@ def simple_load_and_test(path_to_model):
         else:
             print "bad change!"
 
-    classifier = CNNTextClassifier.CNNTextClassifier(model_path="../models/100features_40minwords_10context")
+    classifier = CNNTextClassifier.CNNTextClassifier()
     print "Loading state for classifier..."
     classifier.load(path_to_model)
 
@@ -74,7 +74,6 @@ def to_train(path_to_model=None):
             train["review"][i] = review_text
         else:
             print "bad change!"
-    #TODO: попробуй 50 фильтров
     classifier = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0, window=6, n_filters=50,
                                                      k_max=1, activation='iden',
                                                      word_dimension=100,
@@ -105,7 +104,7 @@ def to_train(path_to_model=None):
     return new_state_path
 
 
-def train_and_test_cross_folds(max_count=None):
+def train_and_test_cross_folds(max_count=None, n_epochs=15):
     print "Loading data..."
     train = pd.read_csv("../data/labeledTrainData.tsv",
                         header=0, delimiter="\t", quoting=3)
@@ -137,36 +136,50 @@ def train_and_test_cross_folds(max_count=None):
         y_train = train["sentiment"][train_index].reset_index(drop=True)
         y_test = train["sentiment"][test_index].reset_index(drop=True)
 
-        classifier = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0, window=5, n_filters=50,
+        classifier = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0.1, window=5, n_filters=50,
                                                          k_max=1, activation='iden',
                                                          word_dimension=100,
                                                          model_path="../models/100features_40minwords_10context")
 
         print "Fitting a cnn to labeled training data..."
         try:
-            classifier.fit(X_train, y_train, X_test, y_test, n_epochs=30)
+            mean_test_loss, test_score = classifier.fit(X_train, y_train, X_test, y_test, n_epochs=n_epochs)
+            results.append((mean_test_loss, test_score))
         except:
-            new_state_path = "../models/cnn_state_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')\
-                             + '_' + str(num)
-            print "Saving state to '%s'..." % new_state_path
-            classifier.save_state(new_state_path)
+            if len(results) > 0:
+                new_results_path = "../results/results_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')\
+                                 + '_' + str(num)
+                print "Saving results to '%s'..." % new_results_path
+                with open(new_results_path, 'w') as f:
+                    f.write(str(results))
             raise
 
-        new_state_path = "../models/cnn_state_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')\
-                         + '_' + str(num)
-        print "Saving state to '%s'..." % new_state_path
-        classifier.save_state(new_state_path)
+    results = np.array(results)
+    losses = results[:, 0]
+    scores = results[:, 1]
+    print "-----------------------------------------------------"
+    print "------MEAN TEST LOSSES = %f ---- MEAN TEST SCORE = %f-----" % (np.mean(losses), np.mean(scores))
+    print "-----------------------------------------------------"
+    new_results_path = "../results/results_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S') \
+                       + '_mean'
+    print "Saving results to '%s'..." % new_results_path
+    with open(new_results_path, 'w') as f:
+        f.write(str((np.mean(losses), np.mean(scores))))
 
-        score = classifier.score(X_test, y_test)
-        print "--------FOLD_NUM = %d, TEST SCORE = %f-----------" % (num, score)
-        results.append(score)
-    print "-----------------------------------------------------"
-    print "-------------MEAN TEST SCORE = %f---------------" % np.mean(results)
-    print "-----------------------------------------------------"
+
+def load_model_and_print_cnn_params(path_to_model):
+    classifier = CNNTextClassifier.CNNTextClassifier()
+    print "Loading state for classifier..."
+    classifier.load(path_to_model)
+    params = classifier.get_cnn_params()
+    print "params of cnn:"
+    print params[-2].eval()
+    print params[-1].eval()
 
 if __name__ == '__main__':
     start_time = time.time()
-    train_and_test_cross_folds(max_count=5000)
+    train_and_test_cross_folds(max_count=300, n_epochs=10)
+    #load_model_and_print_cnn_params('../models/cnn_state_2016-05-09-16:39:40_0')
     #new_state_path = to_train()
     #simple_load_and_test('../models/' + new_state_path)
     #simple_load_and_test('../models/cnn_state_2016-05-08-22:13:01')

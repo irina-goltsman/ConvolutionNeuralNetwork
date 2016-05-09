@@ -14,7 +14,6 @@ theano.config.exception_verbosity = 'high'
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-#TODO: 1. добавить возможность использовать фильтры разного размера одновременно "multiple ‘good’ region sizes always outperformed"
 #TODO: юзать больше карт: from 100 to 600
 #TODO: 4. добавить возможность изменять векторное представление слов в процессе обучения
 #TODO: 2. реализовать линейную модель для сравнения качества классификации
@@ -235,8 +234,8 @@ class CNNForSentences(object):
     """
     Свёрточная сеть с одним свёрточным слоем
     """
-    def __init__(self, input, n_out, n_hidden,
-                 n_filters, n_chanels, window, word_dimension, activation=T.tanh, seed=0, k_max=1):
+    def __init__(self, input, n_out, n_hidden, n_filters, n_chanels, windows, word_dimension,
+                 activation=T.tanh, seed=0, k_max=1):
         """
         :type input: theano.tensor.dtensor4
         :param input: символичный тензор предложений формата:
@@ -246,9 +245,10 @@ class CNNForSentences(object):
 
         :param n_out: количество целевых классов классификации
         :param n_hidden:  число нейронов скрытого полносвязного слоя
-        :param n_filters: число фильтров свёртки
+        :param n_filters: число фильтров для каждого вида свёртки
         :param n_chanels: число входных каналов
-        :param window: размер окна для фильтров
+        :type windows: list
+        :param windows: размеры окон для фильтров
         :param activation: активационная функция
         :param seed: начальное значение для генератора случайных чисел
         """
@@ -257,23 +257,30 @@ class CNNForSentences(object):
         rng = numpy.random.RandomState(seed)
         # assert word_dimension == input.shape[3]
 
-        self.layer0 = ConvLayerForSentences(rng, input_data=input, filter_shape=(n_filters, n_chanels,
-                                                                                 window, word_dimension),
-                                            activation=activation)
-        # Записывает в self.output 4D тензор, размера: (batch size (1), nfilters, output row, output col(1))
-        # output col == 1, т.к. ширина фильтра = word_dimension (ширине изображения)
-        # Меняю форму, на: (nfilters, output row, output col, batch size (1))
-        layer1_input = self.layer0.output.dimshuffle(1, 2, 0, 3)
-        # Меняю форму на: ( nfilters, output row * output col(1) * batch size(1) )
-        layer1_input = layer1_input.flatten(2)
+        self.layers0 = list()
+        layer2_inputs = list()
+        for window in windows:
+            layer0 = ConvLayerForSentences(rng, input_data=input, filter_shape=(n_filters, n_chanels,
+                                                                                     window, word_dimension),
+                                                activation=activation)
+            # Записывает в self.output 4D тензор, размера: (batch size (1), nfilters, output row, output col(1))
+            # output col == 1, т.к. ширина фильтра = word_dimension (ширине изображения)
+            # Меняю форму, на: (nfilters, output row, output col, batch size (1))
+            layer1_input = layer0.output.dimshuffle(1, 2, 0, 3)
+            self.layers0.append(layer0)
+            # Меняю форму на: ( nfilters, output row * batch size(1) * output col(1) )
+            layer1_input = layer1_input.flatten(2)
 
-        if k_max == 1:
-            self.layer1 = MaxOverTimePoolingLayer(layer1_input)
-        else:
-            self.layer1 = KMaxPoolingLayer(layer1_input, k_max)
-        layer2_input = self.layer1.output.flatten(1)
+            if k_max == 1:
+                self.layer1 = MaxOverTimePoolingLayer(layer1_input)
+            else:
+                self.layer1 = KMaxPoolingLayer(layer1_input, k_max)
+            layer2_input = self.layer1.output.flatten(1)
+            layer2_inputs.append(layer2_input)
+        # TODO: если буду юзать мини-батчи, то тут сложнее
+        layer2_input = T.concatenate(layer2_inputs)
         # После этого слоя осталось ровно n_filters * k элементов
-        self.layer2 = FullyConnectedLayer(rng, layer2_input, n_in=n_filters * k_max,
+        self.layer2 = FullyConnectedLayer(rng, layer2_input, n_in=n_filters * k_max * len(windows),
                                           n_out=n_hidden, activation=activation)
 
         # classify the values of the fully-connected sigmoidal layer
@@ -284,7 +291,10 @@ class CNNForSentences(object):
         self.L2_sqr = self.layer3.L2_sqr
 
         # create a list of all model parameters to be fit by gradient descent
-        self.params = self.layer3.params + self.layer2.params + self.layer0.params
+        self.params = self.layer3.params + self.layer2.params
+        # TODO: проверь, возможно есть смысл записать параметры наоборот
+        for layer0 in self.layers0:
+            self.params += layer0.params
 
         self.y_pred = self.layer3.y_pred
         self.p_y_given_x = self.layer3.p_y_given_x
@@ -332,7 +342,7 @@ def text_to_matrix(text, model):
 
 class CNNTextClassifier(BaseEstimator):
 
-    def __init__(self, learning_rate=0.1, n_epochs=3, activation='tanh', window=5,
+    def __init__(self, learning_rate=0.1, n_epochs=3, activation='tanh', windows=[5],
                  n_hidden=10, n_filters=25,
                  L1_reg=0.00, L2_reg=0.00, n_out=2, seed=0, k_max=1, word_dimension=100,
                  model_path="../models/100features_40minwords_10context"):
@@ -341,9 +351,9 @@ class CNNTextClassifier(BaseEstimator):
         :param n_epochs: количество эпох обучения
         :type activation: string, варианты: 'tanh', 'sigmoid', 'relu', 'cappedrelu', 'iden'
         :param activation: вид активационной функции
-        :param window: размер "окна" для обработки близких друг к другу слов
+        :param windows: размеры окон для обработки близких друг к другу слов
         :param n_hidden: число нейронов в скрытом слое
-        :param n_filters: число фильтров
+        :param n_filters: число фильтров для каждого вида окна
         :param L1_reg: параметр для регуляризации
         :param L2_reg: параметр для регуляризации
         :param n_out: количество классов для классификации
@@ -362,7 +372,7 @@ class CNNTextClassifier(BaseEstimator):
         self.activation = activation
         self.n_out = n_out
         self.n_filters = n_filters
-        self.window = window
+        self.windows = windows
         self.word_dimension = word_dimension
         self.seed = seed
         self.is_ready = False
@@ -400,7 +410,7 @@ class CNNTextClassifier(BaseEstimator):
             raise NotImplementedError
 
         self.cnn = CNNForSentences(input=self.x, n_out=self.n_out, activation=activation, n_hidden=self.n_hidden,
-                                   n_filters=self.n_filters, n_chanels=1, window=self.window,
+                                   n_filters=self.n_filters, n_chanels=1, windows=self.windows,
                                    word_dimension=self.word_dimension, seed=self.seed, k_max=self.k_max)
 
         #self.cnn.predict expects one input.
@@ -649,9 +659,9 @@ class CNNTextClassifier(BaseEstimator):
             matrix = text_to_matrix(text, self.model)
             if matrix is None:
                 print "Warning: {0}: '{1}' hasn't meaningful words!".format(i, text)
-            elif matrix.shape[0] < self.window + self.k_max - 1:
-                print "Warning: {0} sentence's length ({1}) is less then window + k_max - 1 ({2})"\
-                    .format(i, matrix.shape[0], self.window + self.k_max - 1)
+            elif matrix.shape[0] < max(self.windows) + self.k_max - 1:
+                print "Warning: {0} sentence's length ({1}) is less then max window + k_max - 1 ({2})"\
+                    .format(i, matrix.shape[0], max(self.windows) + self.k_max - 1)
                 print "sentence: {}".format(text)
                 continue
             text_data_as_matrix.append(matrix)
@@ -673,7 +683,7 @@ class CNNTextClassifier(BaseEstimator):
         result_str.append("activation = %s" % self.activation)
         result_str.append("n_out = %d" % self.n_out)
         result_str.append("n_filters = %d" % self.n_filters)
-        result_str.append("window = %d" % self.window)
+        result_str.append("windows = " + str(self.windows))
         result_str.append("word_dimension = %d" % self.word_dimension)
         result_str.append("seed = %d" % self.seed)
         result_str.append("model_path = %s" % self.model_path)

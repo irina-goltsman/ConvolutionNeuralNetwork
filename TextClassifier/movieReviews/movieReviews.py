@@ -74,7 +74,7 @@ def to_train(path_to_model=None):
             train["review"][i] = review_text
         else:
             print "bad change!"
-    classifier = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0, window=6, n_filters=50,
+    classifier = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0, window=[6], n_filters=50,
                                                      k_max=1, activation='iden',
                                                      word_dimension=100,
                                                      model_path="../models/100features_40minwords_10context")
@@ -138,8 +138,8 @@ def train_and_test_cross_folds(max_count=None, n_epochs=15):
         y_test = train["sentiment"][test_index].reset_index(drop=True)
         #TODO: не нужно каждый раз загружать новую модель, нужно добавить функцию заполнения
         # параметров модели рандомными значениями
-        classifier = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0.1, window=5, n_filters=50,
-                                                         k_max=1, activation='iden',
+        classifier = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0.1, windows=[3, 4, 5],
+                                                         n_filters=5, k_max=1, activation='iden',
                                                          word_dimension=100,
                                                          model_path="../models/100features_40minwords_10context")
 
@@ -183,7 +183,7 @@ def load_model_and_print_cnn_params(path_to_model):
 
 if __name__ == '__main__':
     start_time = time.time()
-    train_and_test_cross_folds(max_count=10000, n_epochs=10)
+    train_and_test_cross_folds(max_count=300, n_epochs=3)
     #load_model_and_print_cnn_params('../models/cnn_state_2016-05-09-16:39:40_0')
     #new_state_path = to_train()
     #simple_load_and_test('../models/' + new_state_path)

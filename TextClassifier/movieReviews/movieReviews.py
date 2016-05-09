@@ -129,13 +129,15 @@ def train_and_test_cross_folds(max_count=None, n_epochs=15):
 
     kf = KFold(max_count, n_folds=n_folds, shuffle=True, random_state=0)
     results = []
+    classifier = None
     for num, (train_index, test_index) in enumerate(kf):
         print "num of fold = %d" % num
         X_train = train["review"][train_index].reset_index(drop=True)
         X_test = train["review"][test_index].reset_index(drop=True)
         y_train = train["sentiment"][train_index].reset_index(drop=True)
         y_test = train["sentiment"][test_index].reset_index(drop=True)
-
+        #TODO: не нужно каждый раз загружать новую модель, нужно добавить функцию заполнения
+        # параметров модели рандомными значениями
         classifier = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0.1, window=5, n_filters=50,
                                                          k_max=1, activation='iden',
                                                          word_dimension=100,
@@ -157,15 +159,18 @@ def train_and_test_cross_folds(max_count=None, n_epochs=15):
     results = np.array(results)
     losses = results[:, 0]
     scores = results[:, 1]
-    print "-----------------------------------------------------"
-    print "------MEAN TEST LOSSES = %f ---- MEAN TEST SCORE = %f-----" % (np.mean(losses), np.mean(scores))
-    print "-----------------------------------------------------"
+    mean_results = str((np.mean(losses), np.mean(scores)))
+    print "mean losses, mean score:"
+    print mean_results
+
     new_results_path = "../results/results_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S') \
                        + '_mean'
     print "Saving results to '%s'..." % new_results_path
     with open(new_results_path, 'w') as f:
-        f.write(str((np.mean(losses), np.mean(scores))))
-
+        result_str = [classifier.get_params_as_string(),"losses, score:", str(results),
+                      "mean losses, mean score:", mean_results]
+        result_str = '\n'.join(result_str)
+        f.write(result_str)
 
 def load_model_and_print_cnn_params(path_to_model):
     classifier = CNNTextClassifier.CNNTextClassifier()
@@ -178,7 +183,7 @@ def load_model_and_print_cnn_params(path_to_model):
 
 if __name__ == '__main__':
     start_time = time.time()
-    train_and_test_cross_folds(max_count=300, n_epochs=10)
+    train_and_test_cross_folds(max_count=10000, n_epochs=10)
     #load_model_and_print_cnn_params('../models/cnn_state_2016-05-09-16:39:40_0')
     #new_state_path = to_train()
     #simple_load_and_test('../models/' + new_state_path)

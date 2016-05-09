@@ -14,17 +14,17 @@ theano.config.exception_verbosity = 'high'
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-#TODO: добавить возможность использовать фильтры разного размера одновременно "multiple ‘good’ region sizes always outperformed"
+#TODO: 1. добавить возможность использовать фильтры разного размера одновременно "multiple ‘good’ region sizes always outperformed"
 #TODO: юзать больше карт: from 100 to 600
-#TODO: добавить возможность изменять векторное представление слов в процессе обучения
-#TODO: реализовать линейную модель для сравнения качества классификации
+#TODO: 4. добавить возможность изменять векторное представление слов в процессе обучения
+#TODO: 2. реализовать линейную модель для сравнения качества классификации
 #TODO: заюзать glove вместо/вместе word2vec
 #TODO: попробовать разные активационные функции, в том числе Ident
-#TODO: визуализировать веса и проверить адекватность
-#TODO: добавить dropout-слой - "use a small dropout rate(0.0-0.5) and a large max norm constraint"
-#TODO: добавить раннюю остановку
+#TODO: 5. добавить dropout-слой - "use a small dropout rate(0.0-0.5) and a large max norm constraint"
 #TODO: лучше юзай 1-max-pooling для предложений
 #TODO: попробовать юзать adaboost и обучать-таки пачками
+#TODO: реализовать 2х слойную модель с k-max-pooling.
+#TODO: 3. добавить функцию заполнения параметров модели рандомными значениями
 
 class ConvLayerForSentences(object):
     """Свёрточный слой для классификации предложений"""
@@ -333,7 +333,7 @@ def text_to_matrix(text, model):
 class CNNTextClassifier(BaseEstimator):
 
     def __init__(self, learning_rate=0.1, n_epochs=3, activation='tanh', window=5,
-                 n_hidden=10, n_filters=25, pooling_type='max_overtime',
+                 n_hidden=10, n_filters=25,
                  L1_reg=0.00, L2_reg=0.00, n_out=2, seed=0, k_max=1, word_dimension=100,
                  model_path="../models/100features_40minwords_10context"):
         """
@@ -344,7 +344,6 @@ class CNNTextClassifier(BaseEstimator):
         :param window: размер "окна" для обработки близких друг к другу слов
         :param n_hidden: число нейронов в скрытом слое
         :param n_filters: число фильтров
-        :param pooling_type: тип пулинга, пока что доступен только max_overtime пулинг
         :param L1_reg: параметр для регуляризации
         :param L2_reg: параметр для регуляризации
         :param n_out: количество классов для классификации
@@ -352,6 +351,8 @@ class CNNTextClassifier(BaseEstimator):
         :param seed: начальное значение для генератора случайных чисел
         :type model_path: string / None
         :param model_path: путь к сохранённой модели векторного представления слов
+        :type k_max: int (>=1)
+        :param k_max: при k==1 используется max-overtime-pooling, иначе k-max-pooling
         """
         self.learning_rate = learning_rate
         self.n_hidden = n_hidden
@@ -361,7 +362,6 @@ class CNNTextClassifier(BaseEstimator):
         self.activation = activation
         self.n_out = n_out
         self.n_filters = n_filters
-        self.pooling_type = pooling_type
         self.window = window
         self.word_dimension = word_dimension
         self.seed = seed
@@ -492,15 +492,15 @@ class CNNTextClassifier(BaseEstimator):
 
         self.train_model = theano.function([self.x, self.y], cost, updates=updates)
 
-        if n_epochs is None:
-            n_epochs = self.n_epochs
+        if n_epochs is not None:
+            self.n_epochs = int(n_epochs)
 
         rng = numpy.random.RandomState(self.seed)
         visualization_frequency = min(visualization_frequency, n_train_samples - 1)
         epoch = 0
         best_valid_score, best_epoch_num = 0, 0
         mean_test_loss, test_score = None, None
-        while epoch < n_epochs:
+        while epoch < self.n_epochs:
             epoch += 1
             print "start epoch %d: this valid score: %f" % (epoch, float(self.score(x_valid_matrix, y_valid)))
 
@@ -662,3 +662,20 @@ class CNNTextClassifier(BaseEstimator):
             return self.cnn.params
         else:
             print "Error in function _set_weights: there is no cnn"
+
+    def get_params_as_string(self):
+        result_str = list()
+        result_str.append("learning_rate = %2f" % self.learning_rate)
+        result_str.append("n_hidden = %d" % self.n_hidden)
+        result_str.append("n_epochs = %d" % self.n_epochs)
+        result_str.append("L1_reg = %2f" % self.L1_reg)
+        result_str.append("L2_reg = %2f" % self.L2_reg)
+        result_str.append("activation = %s" % self.activation)
+        result_str.append("n_out = %d" % self.n_out)
+        result_str.append("n_filters = %d" % self.n_filters)
+        result_str.append("window = %d" % self.window)
+        result_str.append("word_dimension = %d" % self.word_dimension)
+        result_str.append("seed = %d" % self.seed)
+        result_str.append("model_path = %s" % self.model_path)
+        result_str.append("k_max = %d" % self.k_max)
+        return '\n'.join(result_str)

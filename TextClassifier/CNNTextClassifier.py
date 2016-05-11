@@ -1,13 +1,18 @@
+__author__ = 'irina-goltsman'
 # -*- coding: utf-8 -*-
+
+#Большая часть кода для классов - модифицированные примеры с deeplearning.net
+
 import numpy
-import re
-from nltk.corpus import stopwords
 from sklearn.base import BaseEstimator
 import cPickle as pickle
 import theano
 import theano.tensor as T
 from theano.tensor.nnet import conv
 from gensim.models import Word2Vec
+from pandas.core.series import Series
+
+import data_preprocessing as dp
 
 theano.config.exception_verbosity = 'high'
 
@@ -21,7 +26,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 #TODO: попробовать разные активационные функции, в том числе Ident
 #TODO: 5. добавить dropout-слой - "use a small dropout rate(0.0-0.5) and a large max norm constraint"
 #TODO: лучше юзай 1-max-pooling для предложений
-#TODO: попробовать юзать adaboost и обучать-таки пачками
+#TODO: попробовать юзать ada.. и обучать-таки пачками
 #TODO: реализовать 2х слойную модель с k-max-pooling.
 #TODO: 3. добавить функцию заполнения параметров модели рандомными значениями
 
@@ -302,44 +307,6 @@ class CNNForSentences(object):
         self.loss = lambda y: self.layer3.negative_log_likelihood(y)
 
 
-def text_to_word_list(text, remove_stopwords=False):
-    #TODO: можно попробовать включить 0-9(),!?
-    text_words = re.sub("[^a-zA-Z]", " ", text)
-    words = text_words.lower().split()
-    # Optionally remove stop words (false by default)
-    if remove_stopwords:
-        stops = set(stopwords.words("english"))
-        words = [w for w in words if not w in stops]
-
-    return words
-
-
-def make_feature_matrix(words, model):
-    assert len(words) > 0
-    # feature_matrix = np.zeros((len(words), num_features), dtype="float32")
-    feature_matrix = []
-    for word in words:
-        if word in model.vocab:
-            feature_matrix.append(list(model[word]))
-        else:
-            # TODO: заменить на рандомную инициализацию
-            feature_matrix.append([0 for i in xrange(model.layer1_size)])
-    assert len(feature_matrix) > 0
-    feature_matrix = numpy.asarray(feature_matrix)
-    if len(feature_matrix) == 1:
-        feature_matrix = feature_matrix.reshape(1, feature_matrix.shape[0])
-    return feature_matrix
-
-
-# может вернуть None!
-def text_to_matrix(text, model):
-    words = text_to_word_list(text, remove_stopwords=False)
-    if len(words) == 0:
-        return None
-    matrix = make_feature_matrix(words, model)
-    return matrix
-
-
 class CNNTextClassifier(BaseEstimator):
 
     def __init__(self, learning_rate=0.1, n_epochs=3, activation='tanh', windows=[5],
@@ -462,20 +429,19 @@ class CNNTextClassifier(BaseEstimator):
 
         n_valid_samples = int(len(x_train) * validation_part)
         x_valid = x_train[-n_valid_samples:]
-        y_valid = y_train[-n_valid_samples:]
+        y_valid = y_train[-n_valid_samples:].reset_index(drop=True)
         x_train = x_train[0:n_valid_samples]
-        y_train = y_train[0:n_valid_samples]
+        y_train = y_train[0:n_valid_samples].reset_index(drop=True)
+        y_train = y_train.reset_index(drop=True)
 
         print "Feature selection..."
         x_train_matrix = self.__feature_selection(x_train)
         x_valid_matrix = self.__feature_selection(x_valid)
         n_train_samples = x_train_matrix.shape[0]
-        n_valid_samples = x_valid_matrix.shape[0]
 
         if x_test is not None:
             assert len(x_test) == len(y_test)
             x_test_matrix = self.__feature_selection(x_test)
-            n_test_samples = x_test_matrix.shape[0]
 
         print "Feature selection finished"
 
@@ -520,7 +486,7 @@ class CNNTextClassifier(BaseEstimator):
                 if x_train_matrix[real_idx] is None:
                     continue
                 x_current_input = x_train_matrix[real_idx].reshape(1, 1, x_train_matrix[real_idx].shape[0],
-                                                              x_train_matrix[real_idx].shape[1])
+                                                                   x_train_matrix[real_idx].shape[1])
                 train_cost = self.train_model(x_current_input, y_train[real_idx])
 
                 if cur_idx % visualization_frequency == 0 and cur_idx > 0:
@@ -529,7 +495,7 @@ class CNNTextClassifier(BaseEstimator):
                     mean_valid_loss = numpy.mean(valid_losses)
                     print "epoch %d, review %d: this mean valid losses: %f, this mean valid score: %f" \
                           % (epoch, cur_idx, float(mean_valid_loss), self.score(x_valid_matrix, y_valid))
-                    print "current train cost: %f" % train_cost
+                    print "current train losses: %f" % train_cost
             current_valid_score = float(self.score(x_valid_matrix, y_valid))
             print "end of epoch %d: this valid score: %f" % (epoch, current_valid_score)
             if current_valid_score > best_valid_score:
@@ -555,6 +521,8 @@ class CNNTextClassifier(BaseEstimator):
             return (mean_test_loss, test_score)
 
     def predict(self, data):
+        if isinstance(data, Series):
+            data = data.reset_index(drop=True)
         if isinstance(data[0], str) or isinstance(data[0], unicode):
             matrix_data = self.__feature_selection(data)
         else:
@@ -656,7 +624,7 @@ class CNNTextClassifier(BaseEstimator):
                 print type(text)
                 raise AttributeError("feature selection error: not string format")
             # text_to_matrix может вернуть None!
-            matrix = text_to_matrix(text, self.model)
+            matrix = dp.text_to_matrix(text, self.model, strategy='zero', remove_stopwords=False)
             if matrix is None:
                 print "Warning: {0}: '{1}' hasn't meaningful words!".format(i, text)
             elif matrix.shape[0] < max(self.windows) + self.k_max - 1:

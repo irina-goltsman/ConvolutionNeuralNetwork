@@ -1,4 +1,4 @@
-__author__ = 'irina'
+__author__ = 'irina-goltsman'
 # -*- coding: utf-8 -*-
 
 import logging
@@ -8,6 +8,10 @@ import numpy as np
 import pandas as pd
 from bs4 import BeautifulSoup
 from sklearn.cross_validation import KFold
+from sklearn.cross_validation import cross_val_score
+from sklearn.svm import LinearSVC
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.linear_model import LogisticRegression
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s',
                     level=logging.INFO)
@@ -138,8 +142,8 @@ def train_and_test_cross_folds(max_count=None, n_epochs=15):
         y_test = train["sentiment"][test_index].reset_index(drop=True)
         #TODO: не нужно каждый раз загружать новую модель, нужно добавить функцию заполнения
         # параметров модели рандомными значениями
-        classifier = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0.1, windows=[3, 4, 5],
-                                                         n_filters=5, k_max=1, activation='iden',
+        classifier = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0.1, windows=[4, 5, 6],
+                                                         n_filters=10, k_max=1, activation='iden',
                                                          word_dimension=100,
                                                          model_path="../models/100features_40minwords_10context")
 
@@ -167,10 +171,98 @@ def train_and_test_cross_folds(max_count=None, n_epochs=15):
                        + '_mean'
     print "Saving results to '%s'..." % new_results_path
     with open(new_results_path, 'w') as f:
-        result_str = [classifier.get_params_as_string(),"losses, score:", str(results),
+        result_str = ['max_count:%d' % max_count, classifier.get_params_as_string(),"losses, score:", str(results),
                       "mean losses, mean score:", mean_results]
         result_str = '\n'.join(result_str)
         f.write(result_str)
+
+
+def train_and_test_cross_valid(max_count=None, n_epochs=15, n_folds=10):
+    print "Loading data..."
+    train = pd.read_csv("../data/labeledTrainData.tsv",
+                        header=0, delimiter="\t", quoting=3)
+
+    print "size of train data = %d" % (train.shape[0])
+
+    if not max_count:
+        max_count = train.shape[0]
+    print "number of samples = %d" % max_count
+
+    train = train[0:max_count]
+
+    print "Translating reviews to raw text format..."
+    for i in xrange(max_count):
+        review_text = BeautifulSoup(train["review"][i], "lxml").get_text()
+        if review_text != '':
+            train["review"][i] = review_text
+        else:
+            print "bad change!"
+
+    clf = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0.1, windows=[4, 5, 6],
+                                              n_filters=10, k_max=1, activation='iden',
+                                              word_dimension=100, n_epochs=n_epochs,
+                                              model_path="../models/100features_40minwords_10context")
+    results = cross_val_score(clf, train["review"], train["sentiment"], cv=n_folds)
+    results = np.array(results)
+    losses = results[:, 0]
+    scores = results[:, 1]
+    mean_results = str((np.mean(losses), np.mean(scores)))
+    print "mean losses, mean score:"
+    print mean_results
+
+    new_results_path = "../results/results_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S') \
+                       + '_mean'
+    print "Saving results to '%s'..." % new_results_path
+    with open(new_results_path, 'w') as f:
+        result_str = ['max_count:%d' % max_count, clf.get_params_as_string(),"losses, score:", str(results),
+                      "mean losses, mean score:", mean_results]
+        result_str = '\n'.join(result_str)
+        f.write(result_str)
+
+
+def train_and_test_LinearModels_cross_valid(max_count=None, n_folds=10):
+    print "Loading data..."
+    train = pd.read_csv("../data/labeledTrainData.tsv",
+                        header=0, delimiter="\t", quoting=3)
+
+    print "size of train data = %d" % (train.shape[0])
+
+    if not max_count:
+        max_count = train.shape[0]
+    print "number of samples = %d" % max_count
+
+    train = train[0:max_count]
+
+    print "Translating reviews to raw text format..."
+    for i in xrange(max_count):
+        review_text = BeautifulSoup(train["review"][i], "lxml").get_text()
+        if review_text != '':
+            train["review"][i] = review_text
+        else:
+            print "bad change!"
+
+    print "Feature selection..."
+    vectorizer = CountVectorizer()
+    train_matrix = vectorizer.fit_transform(train["review"])
+    print "Feature selection finished"
+    print train_matrix.shape
+
+    #clf = LinearSVC()
+    clf = LogisticRegression()
+    results = cross_val_score(clf, train_matrix, train["sentiment"], cv=n_folds)
+
+    mean_result = str(np.mean(results))
+    print "mean score:"
+    print mean_result
+
+    new_results_path = "../results/results_LogisticRegression_" + datetime.datetime.now()\
+                        .strftime('%Y-%m-%d-%H:%M:%S') + '_mean'
+    print "Saving results to '%s'..." % new_results_path
+    with open(new_results_path, 'w') as f:
+        result_str = [str(clf.get_params()), "score:", str(results), "mean score:", mean_result]
+        result_str = '\n'.join(result_str)
+        f.write(result_str)
+
 
 def load_model_and_print_cnn_params(path_to_model):
     classifier = CNNTextClassifier.CNNTextClassifier()
@@ -183,9 +275,6 @@ def load_model_and_print_cnn_params(path_to_model):
 
 if __name__ == '__main__':
     start_time = time.time()
-    train_and_test_cross_folds(max_count=300, n_epochs=3)
-    #load_model_and_print_cnn_params('../models/cnn_state_2016-05-09-16:39:40_0')
-    #new_state_path = to_train()
-    #simple_load_and_test('../models/' + new_state_path)
-    #simple_load_and_test('../models/cnn_state_2016-05-08-22:13:01')
+    #train_and_test_LinearModels_cross_valid(max_count=25000)
+    train_and_test_cross_valid(max_count=2500, n_epochs=2)
     print("--- %s seconds ---" % (time.time() - start_time))

@@ -404,12 +404,9 @@ class CNNTextClassifier(BaseEstimator):
         """
         return numpy.mean(self.predict(x_data) == y)
 
-    def fit(self, x_train, y_train, x_test=None, y_test=None, n_epochs=None, validation_part=0.1,
+    def fit(self, x_train, y_train, n_epochs=None, validation_part=0.1,
             visualization_frequency=5000):
         """ Fit model
-
-        Pass in X_test, Y_test to compute test error and report during
-        training.
         :type x_train: list(string) или numpy.array(string)
         :param x_train: входные данные - список из текстов
         :type y_train: list(int)
@@ -438,11 +435,6 @@ class CNNTextClassifier(BaseEstimator):
         x_train_matrix = self.__feature_selection(x_train)
         x_valid_matrix = self.__feature_selection(x_valid)
         n_train_samples = x_train_matrix.shape[0]
-
-        if x_test is not None:
-            assert len(x_test) == len(y_test)
-            x_test_matrix = self.__feature_selection(x_test)
-
         print "Feature selection finished"
 
         # подготовим CNN
@@ -472,16 +464,21 @@ class CNNTextClassifier(BaseEstimator):
             self.n_epochs = int(n_epochs)
 
         rng = numpy.random.RandomState(self.seed)
-        visualization_frequency = min(visualization_frequency, n_train_samples - 1)
         epoch = 0
-        best_valid_score, best_epoch_num = 0, 0
-        mean_test_loss, test_score = None, None
-        while epoch < self.n_epochs:
+        best_valid_loss, best_iter_num = numpy.inf, 0
+        # early-stopping parameters
+        visualization_frequency = min(visualization_frequency, n_train_samples - 1)
+        patience = n_train_samples * 2  # look as this many examples regardless
+        patience_increase = 1.5  # wait this much longer when a new best is
+        # found
+        improvement_threshold = 0.95  # a relative improvement of this much is
+        # considered significant
+        done_looping = False
+        while (epoch < self.n_epochs) and (not done_looping):
             epoch += 1
-            print "start epoch %d: this valid score: %f" % (epoch, float(self.score(x_valid_matrix, y_valid)))
-
             indices = rng.permutation(n_train_samples)
             for cur_idx, real_idx in enumerate(indices):
+                iter = (epoch - 1) * n_train_samples + cur_idx
                 # Если матрица пустая - тут пропускаю
                 if x_train_matrix[real_idx] is None:
                     continue
@@ -489,36 +486,29 @@ class CNNTextClassifier(BaseEstimator):
                                                                    x_train_matrix[real_idx].shape[1])
                 train_cost = self.train_model(x_current_input, y_train[real_idx])
 
-                if cur_idx % visualization_frequency == 0 and cur_idx > 0:
+                if iter % visualization_frequency == 0:
                     valid_losses = [self.compute_error(X.reshape(1, 1, X.shape[0], X.shape[1]), y)
                                    for X, y in zip(x_valid_matrix, y_valid) if X is not None]
-                    mean_valid_loss = numpy.mean(valid_losses)
-                    print "epoch %d, review %d: this mean valid losses: %f, this mean valid score: %f" \
-                          % (epoch, cur_idx, float(mean_valid_loss), self.score(x_valid_matrix, y_valid))
-                    print "current train losses: %f" % train_cost
-            current_valid_score = float(self.score(x_valid_matrix, y_valid))
-            print "end of epoch %d: this valid score: %f" % (epoch, current_valid_score)
-            if current_valid_score > best_valid_score:
-                print "NEW BEST VALID SCORE: %f" % current_valid_score
-                best_valid_score = current_valid_score
-                best_epoch_num = epoch
-                if x_test is not None:
-                    test_losses = [self.compute_error(X.reshape(1, 1, X.shape[0], X.shape[1]), y)
-                                    for X, y in zip(x_test_matrix, y_test) if X is not None]
-                    mean_test_loss = numpy.mean(test_losses)
-                    test_score =  self.score(x_test_matrix, y_test)
-                    print "epoch %d: this mean TEST LOSSES: %f, this MEAN TEST SCORE: %f" \
-                          % (epoch, float(mean_test_loss), test_score)
+                    valid_loss = numpy.mean(valid_losses)
+                    valid_score = self.score(x_valid_matrix, y_valid)
+                    print "global_iter %d, epoch %d, review %d: mean valid losses: %f, valid score: %f" \
+                          % (iter, epoch, cur_idx, float(valid_loss), valid_score)
+                    #print "current train losses: %f" % train_cost
 
-        print "Fitting was finished."
+                    if valid_loss < best_valid_loss:
+                        best_valid_loss = valid_loss
+                        best_iter_num = iter
+                        if valid_loss < best_valid_loss * improvement_threshold:
+                            patience = max(patience, iter * patience_increase)
+                if patience <= iter:
+                    done_looping = True
+                    break
+
+        print "OPTIMIZATION COMPLETE."
         print "Train score: %f" % self.score(x_train_matrix, y_train)
         print "Valid score: %f" % self.score(x_valid_matrix, y_valid)
-        print "Best valid score: %f" % best_valid_score
-        print "Best number of epoch: %d" % best_epoch_num
-        if x_test is not None:
-            print "TEST LOSSES of best valid score: %f" % mean_test_loss
-            print "TEST SCORE of best valid score: %f" % test_score
-            return (mean_test_loss, test_score)
+        print "Best valid loss: %f" % best_valid_loss
+        print "Best iter num: %d, best epoch: %d" % (best_iter_num, best_iter_num // n_train_samples)
 
     def predict(self, data):
         if isinstance(data, Series):

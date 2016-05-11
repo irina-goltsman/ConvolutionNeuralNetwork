@@ -203,19 +203,15 @@ def train_and_test_cross_valid(max_count=None, n_epochs=15, n_folds=10):
                                               word_dimension=100, n_epochs=n_epochs,
                                               model_path="../models/100features_40minwords_10context")
     results = cross_val_score(clf, train["review"], train["sentiment"], cv=n_folds)
-    results = np.array(results)
-    losses = results[:, 0]
-    scores = results[:, 1]
-    mean_results = str((np.mean(losses), np.mean(scores)))
-    print "mean losses, mean score:"
-    print mean_results
-
+    mean_score = str(np.mean(results))
+    print "mean score:"
+    print mean_score
     new_results_path = "../results/results_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S') \
                        + '_mean'
     print "Saving results to '%s'..." % new_results_path
     with open(new_results_path, 'w') as f:
-        result_str = ['max_count:%d' % max_count, clf.get_params_as_string(),"losses, score:", str(results),
-                      "mean losses, mean score:", mean_results]
+        result_str = ['max_count:%d' % max_count, clf.get_params_as_string(),"losses, score:",
+                      str(results), "mean score:", mean_score]
         result_str = '\n'.join(result_str)
         f.write(result_str)
 

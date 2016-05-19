@@ -101,7 +101,7 @@ def to_train(path_to_model=None):
         print "Saving state to '%s'..." % new_state_path
         classifier.save_state(new_state_path)
         raise
-Добавила досрочную остановку при обучении cnn
+
     new_state_path = "../models/cnn_state_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
     print "Saving state to '%s'..." % new_state_path
     classifier.save_state(new_state_path)

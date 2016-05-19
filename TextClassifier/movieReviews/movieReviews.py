@@ -101,7 +101,7 @@ def to_train(path_to_model=None):
         print "Saving state to '%s'..." % new_state_path
         classifier.save_state(new_state_path)
         raise
-
+Добавила досрочную остановку при обучении cnn
     new_state_path = "../models/cnn_state_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
     print "Saving state to '%s'..." % new_state_path
     classifier.save_state(new_state_path)
@@ -149,8 +149,9 @@ def train_and_test_cross_folds(max_count=None, n_epochs=15):
 
         print "Fitting a cnn to labeled training data..."
         try:
-            mean_test_loss, test_score = classifier.fit(X_train, y_train, X_test, y_test, n_epochs=n_epochs)
-            results.append((mean_test_loss, test_score))
+            classifier.fit(X_train, y_train, n_epochs=n_epochs)
+            test_score = classifier.score(X_test, y_test)
+            results.append(test_score)
         except:
             if len(results) > 0:
                 new_results_path = "../results/results_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')\
@@ -160,19 +161,16 @@ def train_and_test_cross_folds(max_count=None, n_epochs=15):
                     f.write(str(results))
             raise
 
-    results = np.array(results)
-    losses = results[:, 0]
-    scores = results[:, 1]
-    mean_results = str((np.mean(losses), np.mean(scores)))
-    print "mean losses, mean score:"
-    print mean_results
+    mean_result = str(np.mean(results))
+    print "mean score:"
+    print mean_result
 
     new_results_path = "../results/results_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S') \
                        + '_mean'
     print "Saving results to '%s'..." % new_results_path
     with open(new_results_path, 'w') as f:
-        result_str = ['max_count:%d' % max_count, classifier.get_params_as_string(),"losses, score:", str(results),
-                      "mean losses, mean score:", mean_results]
+        result_str = ['max_count:%d' % max_count, classifier.get_params_as_string(),"scores:", str(results),
+                      "mean score:", mean_result]
         result_str = '\n'.join(result_str)
         f.write(result_str)
 
@@ -199,10 +197,11 @@ def train_and_test_cross_valid(max_count=None, n_epochs=15, n_folds=10):
             print "bad change!"
 
     clf = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0.1, windows=[4, 5, 6],
-                                              n_filters=10, k_max=1, activation='iden',
+                                              n_filters=10, k_max=1, activation='tanh',
                                               word_dimension=100, n_epochs=n_epochs,
                                               model_path="../models/100features_40minwords_10context")
-    results = cross_val_score(clf, train["review"], train["sentiment"], cv=n_folds)
+    kf = KFold(max_count, n_folds=n_folds, shuffle=True, random_state=0)
+    results = cross_val_score(clf, train["review"], train["sentiment"], cv=kf, n_jobs=2)
     mean_score = str(np.mean(results))
     print "mean score:"
     print mean_score
@@ -260,10 +259,10 @@ def train_and_test_LinearModels_cross_valid(max_count=None, n_folds=10):
         f.write(result_str)
 
 
-def load_model_and_print_cnn_params(path_to_model):
+def load_state_and_print_cnn_params(path_to_state):
     classifier = CNNTextClassifier.CNNTextClassifier()
     print "Loading state for classifier..."
-    classifier.load(path_to_model)
+    classifier.load(path_to_state)
     params = classifier.get_cnn_params()
     print "params of cnn:"
     print params[-2].eval()
@@ -272,5 +271,6 @@ def load_model_and_print_cnn_params(path_to_model):
 if __name__ == '__main__':
     start_time = time.time()
     #train_and_test_LinearModels_cross_valid(max_count=25000)
-    train_and_test_cross_valid(max_count=2500, n_epochs=2)
+    train_and_test_cross_valid(max_count=25000, n_epochs=15, n_folds=10)
+    #train_and_test_cross_folds(max_count=10000)
     print("--- %s seconds ---" % (time.time() - start_time))

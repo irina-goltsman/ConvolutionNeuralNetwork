@@ -21,14 +21,13 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 #TODO: юзать больше карт: from 100 to 600
 #TODO: 4. добавить возможность изменять векторное представление слов в процессе обучения
-#TODO: 2. реализовать линейную модель для сравнения качества классификации
 #TODO: заюзать glove вместо/вместе word2vec
 #TODO: попробовать разные активационные функции, в том числе Ident
 #TODO: 5. добавить dropout-слой - "use a small dropout rate(0.0-0.5) and a large max norm constraint"
 #TODO: лучше юзай 1-max-pooling для предложений
 #TODO: попробовать юзать ada.. и обучать-таки пачками
 #TODO: реализовать 2х слойную модель с k-max-pooling.
-#TODO: 3. добавить функцию заполнения параметров модели рандомными значениями
+#TODO: 3. добавить функцию заполнения параметров модели рандомными значениями - прочекать её, там ошибка
 
 class ConvLayerForSentences(object):
     """Свёрточный слой для классификации предложений"""
@@ -331,6 +330,7 @@ class CNNTextClassifier(BaseEstimator):
         :type k_max: int (>=1)
         :param k_max: при k==1 используется max-overtime-pooling, иначе k-max-pooling
         """
+        self._estimator_type = "classifier"
         self.learning_rate = learning_rate
         self.n_hidden = n_hidden
         self.n_epochs = int(n_epochs)
@@ -345,14 +345,6 @@ class CNNTextClassifier(BaseEstimator):
         self.is_ready = False
         self.model_path = model_path
         self.k_max = k_max
-
-        print "Word embedding model is loading from %s." % self.model_path
-        try:
-            self.model = Word2Vec.load_word2vec_format(self.model_path, binary=True)
-        except UnicodeDecodeError:
-            self.model = Word2Vec.load(self.model_path)
-        print "Word embedding model has been loaded."
-        assert self.model.layer1_size == self.word_dimension
 
     def ready(self):
         """
@@ -384,6 +376,15 @@ class CNNTextClassifier(BaseEstimator):
         #we wrap those functions and pad as necessary in 'def predict' and 'def predict_proba'
         self.predict_wrap = theano.function(inputs=[self.x], outputs=self.cnn.y_pred)
         self.predict_proba_wrap = theano.function(inputs=[self.x], outputs=self.cnn.p_y_given_x)
+
+        print "Word embedding model is loading from %s." % self.model_path
+        try:
+            self.model = Word2Vec.load_word2vec_format(self.model_path, binary=True)
+        except UnicodeDecodeError:
+            self.model = Word2Vec.load(self.model_path)
+        print "Word embedding model has been loaded."
+        assert self.model.layer1_size == self.word_dimension
+
         self.is_ready = True
 
     def score(self, x_data, y):
@@ -405,7 +406,7 @@ class CNNTextClassifier(BaseEstimator):
         return numpy.mean(self.predict(x_data) == y)
 
     def fit(self, x_train, y_train, n_epochs=None, validation_part=0.1,
-            visualization_frequency=5000):
+            visualization_frequency=5000, early_stop=False):
         """ Fit model
         :type x_train: list(string) или numpy.array(string)
         :param x_train: входные данные - список из текстов
@@ -419,27 +420,37 @@ class CNNTextClassifier(BaseEstimator):
         :type visualization_frequency: int/None
         :param visualization_frequency: если не None, то каждые visualization_frequency интераций
                                         будет выводиться результат модели на валидационной выборке
+        :type early_stop: bool
+        :param early_stop: если True - будет происходить досрочная остановка.
         """
         assert max(y_train) < self.n_out
         assert min(y_train) >= 0
         assert len(x_train) == len(y_train)
 
-        n_valid_samples = int(len(x_train) * validation_part)
-        x_valid = x_train[-n_valid_samples:]
-        y_valid = y_train[-n_valid_samples:].reset_index(drop=True)
-        x_train = x_train[0:n_valid_samples]
-        y_train = y_train[0:n_valid_samples].reset_index(drop=True)
-        y_train = y_train.reset_index(drop=True)
+        if isinstance(y_train, Series):
+            y_train = y_train.reset_index(drop=True)
 
-        print "Feature selection..."
-        x_train_matrix = self.__feature_selection(x_train)
-        x_valid_matrix = self.__feature_selection(x_valid)
-        n_train_samples = x_train_matrix.shape[0]
-        print "Feature selection finished"
+        n_valid_samples = int(len(x_train) * validation_part)
+        n_train_samples = len(x_train) - n_valid_samples
+
+        x_valid = x_train[-n_valid_samples:]
+        y_valid = y_train[-n_valid_samples:]
+        x_train = x_train[0:n_train_samples]
+        y_train = y_train[0:n_train_samples]
+
+        if isinstance(y_valid, Series):
+            y_valid = y_valid.reset_index(drop=True)
 
         # подготовим CNN
         if not self.is_ready:
             self.ready()
+
+        print "Feature selection..."
+        x_train_matrix = self.__feature_selection(x_train)
+        x_valid_matrix = self.__feature_selection(x_valid)
+        assert n_train_samples == x_train_matrix.shape[0]
+        print "Feature selection finished"
+
 
         self.compute_error = theano.function(inputs=[self.x, self.y],
                                              outputs=self.cnn.loss(self.y))
@@ -468,10 +479,10 @@ class CNNTextClassifier(BaseEstimator):
         best_valid_loss, best_iter_num = numpy.inf, 0
         # early-stopping parameters
         visualization_frequency = min(visualization_frequency, n_train_samples - 1)
-        patience = n_train_samples * 2  # look as this many examples regardless
-        patience_increase = 1.5  # wait this much longer when a new best is
-        # found
-        improvement_threshold = 0.95  # a relative improvement of this much is
+        print "visualization frequency: %d" % visualization_frequency
+        patience = n_train_samples * 4  # look as this many examples regardless
+        patience_increase = 2  # wait this much longer when a new best is found
+        improvement_threshold = 0.9  # a relative improvement of this much is
         # considered significant
         done_looping = False
         while (epoch < self.n_epochs) and (not done_looping):
@@ -498,9 +509,9 @@ class CNNTextClassifier(BaseEstimator):
                     if valid_loss < best_valid_loss:
                         best_valid_loss = valid_loss
                         best_iter_num = iter
-                        if valid_loss < best_valid_loss * improvement_threshold:
+                        if early_stop and (valid_loss < best_valid_loss * improvement_threshold):
                             patience = max(patience, iter * patience_increase)
-                if patience <= iter:
+                if early_stop and (patience <= iter):
                     done_looping = True
                     break
 
@@ -595,7 +606,8 @@ class CNNTextClassifier(BaseEstimator):
         else:
             self.set_params(**params)
             self.ready()
-            self._set_weights(weights)
+            if len(weights) > 0:
+                self._set_weights(weights)
 
     def load(self, path):
         """ Load model parameters from path. """
@@ -618,10 +630,13 @@ class CNNTextClassifier(BaseEstimator):
             if matrix is None:
                 print "Warning: {0}: '{1}' hasn't meaningful words!".format(i, text)
             elif matrix.shape[0] < max(self.windows) + self.k_max - 1:
+                #TODO: разберись, адекватно ли заполняю нехватающие значения
                 print "Warning: {0} sentence's length ({1}) is less then max window + k_max - 1 ({2})"\
                     .format(i, matrix.shape[0], max(self.windows) + self.k_max - 1)
                 print "sentence: {}".format(text)
-                continue
+                min_len = max(self.windows) + self.k_max - 1
+                rest = numpy.random.uniform(low=-1.0, high=1.0, size=(min_len - matrix.shape[0], matrix.shape[1]))
+                matrix = numpy.append(matrix, rest, axis=0)
             text_data_as_matrix.append(matrix)
         return numpy.asarray(text_data_as_matrix)
 

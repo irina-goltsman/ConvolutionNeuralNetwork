@@ -34,6 +34,7 @@ def make_feature_matrix(words, model, strategy):
             if strategy == 'pass':
                 continue
             elif strategy == 'random':
+                # TODO: тут что-то очень плохо, визуализируй веса!
                 feature_matrix.append(np.random.uniform(low=-1.0, high=1.0, size=model.layer1_size))
             elif strategy == 'zero':
                 feature_matrix.append(np.zeros(model.layer1_size))

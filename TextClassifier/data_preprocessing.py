@@ -4,11 +4,29 @@ __author__ = 'irina-goltsman'
 import numpy as np
 import re
 from nltk.corpus import stopwords
+import time
+from gensim.models import Word2Vec
+
+
+def clean_str(string):
+    string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
+    string = re.sub(r"\'s", " \'s", string)
+    string = re.sub(r"\'ve", " \'ve", string)
+    string = re.sub(r"n\'t", " n\'t", string)
+    string = re.sub(r"\'re", " \'re", string)
+    string = re.sub(r"\'d", " \'d", string)
+    string = re.sub(r"\'ll", " \'ll", string)
+    string = re.sub(r",", " , ", string)
+    string = re.sub(r"!", " ! ", string)
+    string = re.sub(r"\(", " \( ", string)
+    string = re.sub(r"\)", " \) ", string)
+    string = re.sub(r"\?", " \? ", string)
+    string = re.sub(r"\s{2,}", " ", string)
+    return string.strip()
 
 
 def text_to_word_list(text, remove_stopwords):
-    #TODO: можно попробовать включить 0-9(),!?
-    text_words = re.sub("[^a-zA-Z]", " ", text)
+    text_words = clean_str(text)
     words = text_words.lower().split()
     # Optionally remove stop words (false by default)
     if remove_stopwords:
@@ -35,7 +53,8 @@ def make_feature_matrix(words, model, strategy):
                 continue
             elif strategy == 'random':
                 # TODO: тут что-то очень плохо, визуализируй веса!
-                feature_matrix.append(np.random.uniform(low=-1.0, high=1.0, size=model.layer1_size))
+                # 0.25 и -0.25 - магические числа из кода Кима
+                feature_matrix.append(np.random.uniform(low=-0.25, high=0.25, size=model.layer1_size))
             elif strategy == 'zero':
                 feature_matrix.append(np.zeros(model.layer1_size))
             else:
@@ -96,7 +115,8 @@ def feature_selection(text_data, word_embedding_model, min_len=None,
             if strategy == 'pass':
                 continue
             elif strategy == 'random':
-                rest = np.random.uniform(low=-1.0, high=1.0, size=(n_rest, matrix.shape[1]))
+                # 0.25 и -0.25 - магические числа из кода Кима
+                rest = np.random.uniform(low=-0.25, high=0.25, size=(n_rest, matrix.shape[1]))
                 matrix = np.append(matrix, rest, axis=0)
             elif strategy == 'zero':
                 rest = np.zeros((n_rest, matrix.shape[1]))

@@ -1,18 +1,17 @@
 __author__ = 'irina-goltsman'
 # -*- coding: utf-8 -*-
+# Большая часть кода для классов - модифицированные примеры с deeplearning.net
 
-#Большая часть кода для классов - модифицированные примеры с deeplearning.net
-
-import numpy
+import numpy as np
+import pandas as pd
 from sklearn.base import BaseEstimator
 import cPickle as pickle
 import theano
 import theano.tensor as T
 from theano.tensor.nnet import conv
-from gensim.models import Word2Vec
 from pandas.core.series import Series
-
-import data_preprocessing as dp
+from sklearn.cross_validation import train_test_split
+import time
 
 theano.config.exception_verbosity = 'high'
 
@@ -25,9 +24,8 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 #TODO: попробовать разные активационные функции, в том числе Ident
 #TODO: 5. добавить dropout-слой - "use a small dropout rate(0.0-0.5) and a large max norm constraint"
 #TODO: лучше юзай 1-max-pooling для предложений
-#TODO: попробовать юзать ada.. и обучать-таки пачками
+#TODO: попробовать юзать adagradient и обучать-таки пачками -  обучение пачками существенно быстрее!
 #TODO: реализовать 2х слойную модель с k-max-pooling.
-#TODO: 3. добавить функцию заполнения параметров модели рандомными значениями - прочекать её, там ошибка
 
 class ConvLayerForSentences(object):
     """Свёрточный слой для классификации предложений"""
@@ -66,7 +64,7 @@ class ConvLayerForSentences(object):
         # каждая карта входных признаков соединена с каждым фильтром,
         # поэтому и такая размерность у матрицы весов
         self.W = theano.shared(
-            numpy.asarray(rng.uniform(low=-W_bound, high=W_bound,
+            np.asarray(rng.uniform(low=-W_bound, high=W_bound,
                                       size=filter_shape),
                           dtype=theano.config.floatX),
             borrow=True
@@ -83,7 +81,7 @@ class ConvLayerForSentences(object):
 
         # смещения - 1D тензор (вектор) - одно смещение для одного фильтра
         # filter_shape[0] - количество фильтров
-        b_values = numpy.zeros((filter_shape[0],), dtype=theano.config.floatX)
+        b_values = np.zeros((filter_shape[0],), dtype=theano.config.floatX)
         self.b = theano.shared(value=b_values, borrow=True)
 
         # дабавляем смещения. Изначально это 1D вектор,
@@ -164,10 +162,10 @@ class FullyConnectedLayer(object):
         # from sqrt(-6./(n_in+n_hidden)) and sqrt(6./(n_in+n_hidden))
         # for tanh activation function
         if W is None:
-            W_values = numpy.asarray(
+            W_values = np.asarray(
                 rng.uniform(
-                    low=-numpy.sqrt(6. / (n_in + n_out)),
-                    high=numpy.sqrt(6. / (n_in + n_out)),
+                    low=-np.sqrt(6. / (n_in + n_out)),
+                    high=np.sqrt(6. / (n_in + n_out)),
                     size=(n_in, n_out)
                 ),
                 dtype=theano.config.floatX
@@ -178,7 +176,7 @@ class FullyConnectedLayer(object):
             W = theano.shared(value=W_values, name='W', borrow=True)
 
         if b is None:
-            b_values = numpy.zeros((n_out,), dtype=theano.config.floatX)
+            b_values = np.zeros((n_out,), dtype=theano.config.floatX)
             b = theano.shared(value=b_values, name='b', borrow=True)
 
         self.W = W
@@ -206,10 +204,10 @@ class SoftmaxLayer(object):
         :type n_out: int
         :param n_out: размерость выхода - количество целевых значений для классификации
         """
-        self.W = theano.shared(value=numpy.zeros((n_in, n_out), dtype=theano.config.floatX),
+        self.W = theano.shared(value=np.zeros((n_in, n_out), dtype=theano.config.floatX),
                                name='W', borrow=True)
         # Инициализация вектора сдвига
-        b_values = numpy.zeros((n_out,), dtype=theano.config.floatX)
+        b_values = np.zeros((n_out,), dtype=theano.config.floatX)
         self.b = theano.shared(value=b_values, name='b', borrow=True)
 
         # Вычисление вектора принадлежности к каждому классу
@@ -258,14 +256,14 @@ class CNNForSentences(object):
         """
         self.softmax = T.nnet.softmax
 
-        rng = numpy.random.RandomState(seed)
+        rng = np.random.RandomState(seed)
         # assert word_dimension == input.shape[3]
 
         self.layers0 = list()
         layer2_inputs = list()
         for window in windows:
             layer0 = ConvLayerForSentences(rng, input_data=input, filter_shape=(n_filters, n_chanels,
-                                                                                     window, word_dimension),
+                                                                                window, word_dimension),
                                                 activation=activation)
             # Записывает в self.output 4D тензор, размера: (batch size (1), nfilters, output row, output col(1))
             # output col == 1, т.к. ширина фильтра = word_dimension (ширине изображения)
@@ -308,11 +306,11 @@ class CNNForSentences(object):
 
 class CNNTextClassifier(BaseEstimator):
 
-    def __init__(self, learning_rate=0.1, n_epochs=3, activation='tanh', windows=[5],
-                 n_hidden=10, n_filters=25,
-                 L1_reg=0.00, L2_reg=0.00, n_out=2, seed=0, k_max=1, word_dimension=100,
-                 model_path="../models/100features_40minwords_10context"):
+    def __init__(self, word_embedding, learning_rate=0.1, n_epochs=3, activation='tanh', windows=[5],
+                 n_hidden=10, n_filters=25, L1_reg=0.00, L2_reg=0.00, n_out=2,
+                 seed=0, k_max=1, word_dimension=100, non_static=False):
         """
+        :param word_embedding: матрица, i-ая строка содержит векторное представление i-го слова
         :param learning_rate: темп обучения
         :param n_epochs: количество эпох обучения
         :type activation: string, варианты: 'tanh', 'sigmoid', 'relu', 'cappedrelu', 'iden'
@@ -325,11 +323,10 @@ class CNNTextClassifier(BaseEstimator):
         :param n_out: количество классов для классификации
         :param word_dimension: размерность слов
         :param seed: начальное значение для генератора случайных чисел
-        :type model_path: string / None
-        :param model_path: путь к сохранённой модели векторного представления слов
         :type k_max: int (>=1)
         :param k_max: при k==1 используется max-overtime-pooling, иначе k-max-pooling
         """
+        self.word_embedding = word_embedding
         self._estimator_type = "classifier"
         self.learning_rate = learning_rate
         self.n_hidden = n_hidden
@@ -343,17 +340,24 @@ class CNNTextClassifier(BaseEstimator):
         self.word_dimension = word_dimension
         self.seed = seed
         self.is_ready = False
-        self.model_path = model_path
+        self.is_ready_to_train = False
         self.k_max = k_max
+        self.non_static = non_static
 
     def ready(self):
         """
         this function is called from "fit"
         """
-        #input
-        self.x = T.tensor4('x')
-        #output (a label)
-        self.y = T.lscalar('y')
+        # input
+        self.x = T.vector('x')
+        # output (a label)
+        # TODO: ivector
+        self.y = T.iscalar('y')
+        self.words = theano.shared(value=self.word_embedding, name="Words", borrow=True)
+
+        layer0_input = self.words[T.cast(self.x.flatten(), dtype="int32")]\
+            .reshape((1, 1, self.x.shape[0], self.words.shape[1]))
+        # TODO: .reshape((self.x.shape[0], 1, self.x.shape[1], self.words.shape[1]))
 
         if self.activation == 'tanh':
             activation = T.tanh
@@ -368,7 +372,7 @@ class CNNTextClassifier(BaseEstimator):
         else:
             raise NotImplementedError
 
-        self.cnn = CNNForSentences(input=self.x, n_out=self.n_out, activation=activation, n_hidden=self.n_hidden,
+        self.cnn = CNNForSentences(input=layer0_input, n_out=self.n_out, activation=activation, n_hidden=self.n_hidden,
                                    n_filters=self.n_filters, n_chanels=1, windows=self.windows,
                                    word_dimension=self.word_dimension, seed=self.seed, k_max=self.k_max)
 
@@ -377,15 +381,52 @@ class CNNTextClassifier(BaseEstimator):
         self.predict_wrap = theano.function(inputs=[self.x], outputs=self.cnn.y_pred)
         self.predict_proba_wrap = theano.function(inputs=[self.x], outputs=self.cnn.p_y_given_x)
 
-        print "Word embedding model is loading from %s." % self.model_path
-        try:
-            self.model = Word2Vec.load_word2vec_format(self.model_path, binary=True)
-        except UnicodeDecodeError:
-            self.model = Word2Vec.load(self.model_path)
-        print "Word embedding model has been loaded."
-        assert self.model.layer1_size == self.word_dimension
-
         self.is_ready = True
+
+    def ready_to_train(self, x_train, y_train):
+        # zero_vec_tensor = T.vector()
+        # # Если non_static, то 0ая компонента матрицы слов могла измениться, а она должна всегда быть нулевым вектором.
+        # set_zero = theano.function([zero_vec_tensor], updates=[(self.words, T.set_subtensor(self.words[0, :], zero_vec_tensor))],
+        #                            allow_input_downcast=True)
+        self.compute_error = theano.function(inputs=[self.x, self.y],
+                                             outputs=self.cnn.loss(self.y))
+
+        cost = self.cnn.loss(self.y) + self.L1_reg * self.cnn.L1 + self.L2_reg * self.cnn.L2_sqr
+
+        # Создаём список градиентов для всех параметров модели
+        if self.non_static:
+            grads = T.grad(cost, self.cnn.params + [self.words])
+        else:
+            grads = T.grad(cost, self.cnn.params)
+
+        # train_model это функция, которая обновляет параметры модели с помощью SGD
+        # Так как модель имеет много парамметров, было бы утомтельным вручную создавать правила
+        # обновления для каждой модели, поэтому нужен updates list для автоматического
+        # прохождения по парам (params[i], grads[i])
+        updates = [(param_i, param_i - self.learning_rate * grad_i)
+                   for param_i, grad_i in zip(self.cnn.params, grads)]
+
+        index = T.iscalar()
+        self.train_model = theano.function([index], cost, updates=updates,
+                                           givens={self.x: x_train[index],
+                                                   self.y: y_train[index]})
+        self.is_ready_to_train = True
+
+    @staticmethod
+    def shared_dataset(x_data, y_data, borrow=True):
+        """ Function that loads the dataset into shared variables
+
+        The reason we store our dataset in shared variables is to allow
+        Theano to copy it into the GPU memory (when code is run on GPU).
+        Since copying data into the GPU is slow, copying a minibatch everytime
+        is needed (the default behaviour if the data is not in a shared
+        variable) would lead to a large decrease in performance.
+        """
+        if isinstance(x_data, pd.Series):
+            x_data = x_data.values.tolist()
+        shared_x = theano.shared(np.asarray(x_data, dtype=theano.config.floatX), borrow=borrow)
+        shared_y = theano.shared(np.asarray(y_data, dtype=theano.config.floatX), borrow=borrow)
+        return shared_x, T.cast(shared_y, 'int32')
 
     def score(self, x_data, y):
         """Returns the mean accuracy on the given test data and labels.
@@ -403,7 +444,7 @@ class CNNTextClassifier(BaseEstimator):
         z : float
 
         """
-        return numpy.mean(self.predict(x_data) == y)
+        return np.mean(self.predict(x_data) == y)
 
     def fit(self, x_train, y_train, n_epochs=None, validation_part=0.1,
             visualization_frequency=5000, early_stop=False):
@@ -412,7 +453,6 @@ class CNNTextClassifier(BaseEstimator):
         :param x_train: входные данные - список из текстов
         :type y_train: list(int)
         :param y_train: целевые значения для каждого текста
-
         :type n_epochs: int/None
         :param n_epochs: used to override self.n_epochs from init.
         :type validation_part: float
@@ -427,84 +467,52 @@ class CNNTextClassifier(BaseEstimator):
         assert min(y_train) >= 0
         assert len(x_train) == len(y_train)
 
-        if isinstance(y_train, Series):
-            y_train = y_train.reset_index(drop=True)
-
-        n_valid_samples = int(len(x_train) * validation_part)
-        n_train_samples = len(x_train) - n_valid_samples
-
-        x_valid = x_train[-n_valid_samples:]
-        y_valid = y_train[-n_valid_samples:]
-        x_train = x_train[0:n_train_samples]
-        y_train = y_train[0:n_train_samples]
+        x_train, x_valid, y_train, y_valid = train_test_split(x_train, y_train,
+                                                              test_size=validation_part,
+                                                              random_state=100)
+        n_train_samples = len(x_train)
 
         if isinstance(y_valid, Series):
             y_valid = y_valid.reset_index(drop=True)
+        if isinstance(x_valid, Series):
+            x_valid = x_valid.reset_index(drop=True)
 
         # подготовим CNN
         if not self.is_ready:
             self.ready()
 
-        print "Feature selection..."
-        x_train_matrix = self.__feature_selection(x_train)
-        x_valid_matrix = self.__feature_selection(x_valid)
-        assert n_train_samples == x_train_matrix.shape[0]
-        print "Feature selection finished"
-
-
-        self.compute_error = theano.function(inputs=[self.x, self.y],
-                                             outputs=self.cnn.loss(self.y))
-
-        cost = self.cnn.loss(self.y) + self.L1_reg * self.cnn.L1 + self.L2_reg * self.cnn.L2_sqr
-
-        # Создаём список градиентов для всех параметров модели
-        grads = T.grad(cost, self.cnn.params)
-
-        # train_model это функция, которая обновляет параметры модели с помощью SGD
-        # Так как модель имеет много парамметров, было бы утомтельным вручную создавать правила
-        # обновления для каждой модели, поэтому нужен updates list для автоматического
-        # прохождения по парам (params[i], grads[i])
-        updates = [
-            (param_i, param_i - self.learning_rate * grad_i)
-            for param_i, grad_i in zip(self.cnn.params, grads)
-        ]
-
-        self.train_model = theano.function([self.x, self.y], cost, updates=updates)
+        x_train, y_train = self.shared_dataset(x_train, y_train)
+        if not self.is_ready_to_train:
+            self.ready_to_train(x_train, y_train)
 
         if n_epochs is not None:
             self.n_epochs = int(n_epochs)
 
-        rng = numpy.random.RandomState(self.seed)
+        rng = np.random.RandomState(self.seed)
         epoch = 0
-        best_valid_loss, best_iter_num = numpy.inf, 0
+        best_valid_loss, best_iter_num = np.inf, 0
         # early-stopping parameters
         visualization_frequency = min(visualization_frequency, n_train_samples - 1)
         print "visualization frequency: %d" % visualization_frequency
         patience = n_train_samples * 4  # look as this many examples regardless
         patience_increase = 2  # wait this much longer when a new best is found
         improvement_threshold = 0.9  # a relative improvement of this much is
-        # considered significant
         done_looping = False
         while (epoch < self.n_epochs) and (not done_looping):
+            start_time = time.time()
             epoch += 1
             indices = rng.permutation(n_train_samples)
             for cur_idx, real_idx in enumerate(indices):
                 iter = (epoch - 1) * n_train_samples + cur_idx
-                # Если матрица пустая - тут пропускаю
-                if x_train_matrix[real_idx] is None:
-                    continue
-                x_current_input = x_train_matrix[real_idx].reshape(1, 1, x_train_matrix[real_idx].shape[0],
-                                                                   x_train_matrix[real_idx].shape[1])
-                train_cost = self.train_model(x_current_input, y_train[real_idx])
+                train_cost = self.train_model(real_idx)
 
                 if iter % visualization_frequency == 0:
-                    valid_losses = [self.compute_error(X.reshape(1, 1, X.shape[0], X.shape[1]), y)
-                                   for X, y in zip(x_valid_matrix, y_valid) if X is not None]
-                    valid_loss = numpy.mean(valid_losses)
-                    valid_score = self.score(x_valid_matrix, y_valid)
+                    valid_losses = [self.compute_error(X, y) for X, y in zip(x_valid, y_valid)]
+                    valid_loss = np.mean(valid_losses)
+                    valid_score = self.score(x_valid, y_valid)
                     print "global_iter %d, epoch %d, review %d: mean valid losses: %f, valid score: %f" \
                           % (iter, epoch, cur_idx, float(valid_loss), valid_score)
-                    #print "current train losses: %f" % train_cost
+                    print "current train losses: %f" % train_cost
 
                     if valid_loss < best_valid_loss:
                         best_valid_loss = valid_loss
@@ -514,32 +522,29 @@ class CNNTextClassifier(BaseEstimator):
                 if early_stop and (patience <= iter):
                     done_looping = True
                     break
+            print "Epoch %d finished. Training time: %.2f secs" % (epoch, time.time()-start_time)
 
         print "OPTIMIZATION COMPLETE."
-        print "Train score: %f" % self.score(x_train_matrix, y_train)
-        print "Valid score: %f" % self.score(x_valid_matrix, y_valid)
+        # print "Train score: %f" % self.score(x_train, y_train)
+        print "Valid score: %f" % self.score(x_valid, y_valid)
         print "Best valid loss: %f" % best_valid_loss
         print "Best iter num: %d, best epoch: %d" % (best_iter_num, best_iter_num // n_train_samples)
 
     def predict(self, data):
+        """
+        :param data: 2d матрица
+        """
         if isinstance(data, Series):
             data = data.reset_index(drop=True)
-        if isinstance(data[0], str) or isinstance(data[0], unicode):
-            matrix_data = self.__feature_selection(data)
-        else:
-            matrix_data = data
-        if isinstance(matrix_data, list) or isinstance(matrix_data, numpy.matrix):
-            matrix_data = numpy.array(matrix_data)
-        return [self.predict_wrap(X.reshape(1, 1, X.shape[0], X.shape[1])) for X in matrix_data]
+        # TODO: предсказывать сразу для всего датасета.
+        #return [self.predict_wrap(X.reshape(1, len(X))) for X in data]
+        return [self.predict_wrap(X) for X in data]
 
     def predict_proba(self, data):
-        if isinstance(data[0], str):
-            matrix_data = self.__feature_selection(data)
-        else:
-            matrix_data = data
-        if isinstance(matrix_data, list) or isinstance(matrix_data, numpy.matrix):
-            matrix_data = numpy.array(matrix_data)
-        return [self.predict_proba_wrap(X.reshape(1, 1, X.shape[0], X.shape[1])) for X in matrix_data]
+        if isinstance(data, Series):
+            data = data.reset_index(drop=True)
+        # TODO: предсказывать сразу для всего датасета.
+        return [self.predict_proba_wrap(X.reshape(1, len(X))) for X in data]
 
     def __getstate__(self):
         """ Return state sequence."""
@@ -619,27 +624,6 @@ class CNNTextClassifier(BaseEstimator):
         with open(path, 'w') as f:
             pickle.dump(self.__getstate__(), f)
 
-    def __feature_selection(self, text_data):
-        text_data_as_matrix = []
-        for i, text in enumerate(text_data):
-            if not isinstance(text, str) and not isinstance(text, numpy.unicode):
-                print type(text)
-                raise AttributeError("feature selection error: not string format")
-            # text_to_matrix может вернуть None!
-            matrix = dp.text_to_matrix(text, self.model, strategy='zero', remove_stopwords=False)
-            if matrix is None:
-                print "Warning: {0}: '{1}' hasn't meaningful words!".format(i, text)
-            elif matrix.shape[0] < max(self.windows) + self.k_max - 1:
-                #TODO: разберись, адекватно ли заполняю нехватающие значения
-                print "Warning: {0} sentence's length ({1}) is less then max window + k_max - 1 ({2})"\
-                    .format(i, matrix.shape[0], max(self.windows) + self.k_max - 1)
-                print "sentence: {}".format(text)
-                min_len = max(self.windows) + self.k_max - 1
-                rest = numpy.random.uniform(low=-1.0, high=1.0, size=(min_len - matrix.shape[0], matrix.shape[1]))
-                matrix = numpy.append(matrix, rest, axis=0)
-            text_data_as_matrix.append(matrix)
-        return numpy.asarray(text_data_as_matrix)
-
     def get_cnn_params(self):
         if hasattr(self, 'cnn'):
             return self.cnn.params
@@ -659,6 +643,5 @@ class CNNTextClassifier(BaseEstimator):
         result_str.append("windows = " + str(self.windows))
         result_str.append("word_dimension = %d" % self.word_dimension)
         result_str.append("seed = %d" % self.seed)
-        result_str.append("model_path = %s" % self.model_path)
         result_str.append("k_max = %d" % self.k_max)
         return '\n'.join(result_str)

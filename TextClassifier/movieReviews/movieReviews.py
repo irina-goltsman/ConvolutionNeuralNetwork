@@ -195,13 +195,15 @@ def train_and_test_cross_valid(max_count=None, n_epochs=15, n_folds=10):
             train["review"][i] = review_text
         else:
             print "bad change!"
+    print "Translating reviews to raw text format was finished."
 
     clf = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0.1, windows=[4, 5, 6],
                                               n_filters=10, k_max=1, activation='tanh',
                                               word_dimension=100, n_epochs=n_epochs,
                                               model_path="../models/100features_40minwords_10context")
     kf = KFold(max_count, n_folds=n_folds, shuffle=True, random_state=0)
-    results = cross_val_score(clf, train["review"], train["sentiment"], cv=kf, n_jobs=2)
+    results = cross_val_score(clf, train["review"], train["sentiment"], cv=kf, n_jobs=2,
+                              fit_params={'early_stop':True})
     mean_score = str(np.mean(results))
     print "mean score:"
     print mean_score
@@ -271,6 +273,6 @@ def load_state_and_print_cnn_params(path_to_state):
 if __name__ == '__main__':
     start_time = time.time()
     #train_and_test_LinearModels_cross_valid(max_count=25000)
-    train_and_test_cross_valid(max_count=25000, n_epochs=15, n_folds=10)
+    train_and_test_cross_valid(max_count=10000, n_epochs=10, n_folds=10)
     #train_and_test_cross_folds(max_count=10000)
     print("--- %s seconds ---" % (time.time() - start_time))

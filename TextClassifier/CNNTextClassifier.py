@@ -27,6 +27,8 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 #TODO: попробовать юзать adagradient и обучать-таки пачками -  обучение пачками существенно быстрее!
 #TODO: реализовать 2х слойную модель с k-max-pooling.
 
+#TODO: в датасете MR бывают совсем длинные тексты, возможно выравнивание по длине - не лучшая идея
+
 class ConvLayerForSentences(object):
     """Свёрточный слой для классификации предложений"""
 
@@ -424,6 +426,8 @@ class CNNTextClassifier(BaseEstimator):
         """
         if isinstance(x_data, pd.Series):
             x_data = x_data.values.tolist()
+        # TODO: замени на нормальную проверку совпадения длин предложений
+        assert len(x_data[0]) == len(x_data[1])
         shared_x = theano.shared(np.asarray(x_data, dtype=theano.config.floatX), borrow=borrow)
         shared_y = theano.shared(np.asarray(y_data, dtype=theano.config.floatX), borrow=borrow)
         return shared_x, T.cast(shared_y, 'int32')

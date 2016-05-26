@@ -18,9 +18,10 @@ import CNNTextClassifier
 def words_count(text):
     return len(text.split())
 
-def train_and_test_cross_valid(n_epochs=10, n_folds=10, non_static=False, word_embedding="-word2vec"):
+def train_and_test_cross_valid(data_file = "mr.p", n_epochs=10, n_folds=10,
+                               non_static=False, word_embedding="-word2vec"):
     print "loading data...",
-    x = cPickle.load(open("mr.p", "rb"))
+    x = cPickle.load(open(data_file, "rb"))
     data, w2v_matrix, random_matrix, word_idx_map, vocab = x[0], x[1], x[2], x[3], x[4]
     print "data loaded!"
     print "%d samples." % len(data)
@@ -46,12 +47,12 @@ def train_and_test_cross_valid(n_epochs=10, n_folds=10, non_static=False, word_e
     results = cross_val_score(clf, data["idx_features"], data["label"], cv=kf, n_jobs=1,
                               fit_params={'early_stop': True})
     mean_score = str(np.mean(results))
-    #clf.fit(data["idx_features"], data["label"], early_stop=True)
+    # clf.fit(data["idx_features"], data["label"], early_stop=True)
 
     print "mean score:"
     print mean_score
 
-    new_results_path = "../results/results_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S') \
+    new_results_path = "../results/MR_results_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S') \
                        + '_mean'
     print "Saving results to '%s'..." % new_results_path
     with open(new_results_path, 'w') as f:
@@ -92,5 +93,5 @@ def get_idx_from_sent(sent, word_idx_map, max_l=51, k=300, filter_h=5):
 
 if __name__ == "__main__":
     start_time = time.time()
-    train_and_test_cross_valid(n_epochs=10, n_folds=10, non_static=False)
+    train_and_test_cross_valid(data_file="mr_prepared_data", n_epochs=10, n_folds=10, non_static=False)
     print("--- %s seconds ---" % (time.time() - start_time))

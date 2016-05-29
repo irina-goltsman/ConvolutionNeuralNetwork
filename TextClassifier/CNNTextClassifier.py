@@ -12,10 +12,9 @@ from theano.tensor.nnet import conv
 from pandas.core.series import Series
 from sklearn.cross_validation import train_test_split
 import time
+import warnings
 
 theano.config.exception_verbosity = 'high'
-
-import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 #TODO: юзать больше карт: from 100 to 600
@@ -28,6 +27,11 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 #TODO: реализовать 2х слойную модель с k-max-pooling.
 
 #TODO: в датасете MR бывают совсем длинные тексты, возможно выравнивание по длине - не лучшая идея
+#TODO: почему-то с word_dim = 100 обучается, а с word_dim = 300 - нет.
+#TODO: иногда в процессе обучения с какого-то периода начинают возникать значения nan
+# - нужно визуализировать веса в этот момент и понять, чем это вызвано, и как физически вообще возможно
+#TODO: разобраться с кодом DCNN, понять, как происходит процесс обучения и как технически реализуется
+# dynamic k-max?
 
 class ConvLayerForSentences(object):
     """Свёрточный слой для классификации предложений"""
@@ -451,7 +455,7 @@ class CNNTextClassifier(BaseEstimator):
         return np.mean(self.predict(x_data) == y)
 
     def fit(self, x_train, y_train, n_epochs=None, validation_part=0.1,
-            visualization_frequency=5000, early_stop=False):
+            visualization_frequency=2000, early_stop=False):
         """ Fit model
         :type x_train: list(string) или numpy.array(string)
         :param x_train: входные данные - список из текстов
@@ -498,8 +502,8 @@ class CNNTextClassifier(BaseEstimator):
         # early-stopping parameters
         visualization_frequency = min(visualization_frequency, n_train_samples - 1)
         print "visualization frequency: %d" % visualization_frequency
-        patience = n_train_samples * 4  # look as this many examples regardless
-        patience_increase = 2  # wait this much longer when a new best is found
+        patience = n_train_samples * 2  # look as this many examples regardless
+        patience_increase = 1.5  # wait this much longer when a new best is found
         improvement_threshold = 0.9  # a relative improvement of this much is
         done_looping = False
         while (epoch < self.n_epochs) and (not done_looping):
@@ -518,12 +522,17 @@ class CNNTextClassifier(BaseEstimator):
                           % (iter, epoch, cur_idx, float(valid_loss), valid_score)
                     print "current train losses: %f" % train_cost
 
+                    if early_stop and (valid_loss * improvement_threshold < best_valid_loss):
+                        patience = max(patience, iter * patience_increase)
+                        print "new patience = %d" % patience
                     if valid_loss < best_valid_loss:
                         best_valid_loss = valid_loss
                         best_iter_num = iter
-                        if early_stop and (valid_loss < best_valid_loss * improvement_threshold):
-                            patience = max(patience, iter * patience_increase)
-                if early_stop and (patience <= iter):
+
+                if early_stop and (patience < iter):
+                    print "Early stop!"
+                    print "patience = %d" % patience
+                    print "iter = %d" % iter
                     done_looping = True
                     break
             print "Epoch %d finished. Training time: %.2f secs" % (epoch, time.time()-start_time)

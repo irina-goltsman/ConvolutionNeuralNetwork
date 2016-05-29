@@ -2,11 +2,24 @@ __author__ = 'irina-goltsman'
 # -*- coding: utf-8 -*-
 
 import numpy as np
+import pandas as pd
 import re
 from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import CountVectorizer
 import time
 import cPickle
+from gensim.models import Word2Vec
+
+
+def words_count(text):
+    return len(text.split())
+
+
+def get_output_name(dataset_name, model_name, max_size=None):
+    output = "./prepocessed_data/" + dataset_name + "_" + model_name
+    if max_size is not None:
+        output += "_" + str(max_size)
+    return output
 
 
 def make_vocab_list(data, min_df=1):
@@ -46,25 +59,38 @@ def load_bin_vec(fname, vocab):
     return word_vecs
 
 
-def add_unknown_words(model, vocab, min_df=1, k=300, v_min=-0.25, v_max=0.25):
+def load_w2v(model_path, vocab):
+    try:
+        model = Word2Vec.load_word2vec_format(model_path, binary=True)
+    except UnicodeDecodeError:
+        model = Word2Vec.load(model_path)
+    dim = model.layer1_size
+    word_vecs = {}
+    for word in vocab:
+        if word in model:
+            word_vecs[word] = model[word]
+    return word_vecs, dim
+
+
+def add_unknown_words(model, vocab, dim, min_df=1, v_min=-0.25, v_max=0.25):
     """
         Расширяем модель неизвестными словами, рандомно докидывая вектора от v_min до v_max
     """
     for word in vocab:
         if word not in model and vocab[word] >= min_df:
-            model[word] = np.random.uniform(v_min, v_max, k)
+            model[word] = np.random.uniform(v_min, v_max, dim)
 
 
-def get_embedding_matrix(word_vecs, k=300):
+def get_embedding_matrix(word_vecs, dim):
     """
     Get word matrix. W[i] is the vector for word indexed by i
     :param word_vecs: словарь, который для каждого слова возвращает векторное представление
     """
     vocab_size = len(word_vecs)
     word_idx_map = dict()
-    W_matrix = np.zeros(shape=(vocab_size + 1, k), dtype='float32')
+    W_matrix = np.zeros(shape=(vocab_size + 1, dim), dtype='float32')
     # Это нужно для заполнения нулями предложений до необходимой длины
-    W_matrix[0] = np.zeros(k, dtype='float32')
+    W_matrix[0] = np.zeros(dim, dtype='float32')
     i = 1
     for word in word_vecs:
         W_matrix[i] = word_vecs[word]
@@ -100,21 +126,52 @@ def preprocess_dataset(model_path, data_path, load_function, output="prepared_da
     vocabulary = make_vocab_list(data["text"])
     print "vocab size: " + str(len(vocabulary))
     print "Word embedding model is loading from %s." % model_path
-    word_vec = load_bin_vec(model_path, vocabulary)
+    word_vec, dim = load_w2v(model_path, vocabulary)
     print "Word embedding model has been loaded."
+    print "Word dimensions = %d" % dim
     print "num words already in word2vec: " + str(len(word_vec))
 
     # Расширяем модель неизвестными словами, рандомно докидывая вектора -0.25 до 0.25
-    add_unknown_words(word_vec, vocabulary)
+    add_unknown_words(word_vec, vocabulary, dim)
     # W - матрица всех слов из модели word2vec и word_idx_map - словарь, по слову можно узнать id, чтобы вызвать W[id]
-    W_matrix, word_idx_map = get_embedding_matrix(word_vec)
+    W_matrix, word_idx_map = get_embedding_matrix(word_vec, dim)
     # Альтернативно можно не использовать word2vec, а просто рандомно инициализировать веса! это матрица W2
     rand_vecs = {}
-    add_unknown_words(rand_vecs, vocabulary)
-    W2_matrix, _ = get_embedding_matrix(rand_vecs)
+    add_unknown_words(rand_vecs, vocabulary, dim)
+    W2_matrix, _ = get_embedding_matrix(rand_vecs, dim)
     cPickle.dump([data, W_matrix, W2_matrix, word_idx_map, vocabulary], open(output, "wb"))
     print "dataset preprocessed and saved as '%s'" % output
     print("--- %s seconds ---" % (time.time() - start_time))
+
+
+
+def add_idx_features(data, word_idx_map, max_l=51, k=300, filter_h=5):
+    """
+    Transforms sentences into a 2-d matrix.
+    """
+    data_features = pd.Series([[]], index=data.index)
+    for i in data.index:
+        data_features[i] = get_idx_from_sent(data["text"][i], word_idx_map, max_l, k, filter_h)
+    data["idx_features"] = data_features
+    return data
+
+
+def get_idx_from_sent(sent, word_idx_map, max_l=51, k=300, filter_h=5):
+    """
+    Transforms sentence into a list of indices. Pad with zeroes.
+    """
+    x = []
+    pad = filter_h - 1
+    for i in xrange(pad):
+        # Под нулевым индексом в словаре word_idx_map - пустое слово.
+        x.append(0)
+    words = sent.split()
+    for word in words:
+        if word in word_idx_map:
+            x.append(word_idx_map[word])
+    while len(x) < max_l + 2 * pad:
+        x.append(0)
+    return x
 
 
 def text_to_word_list(text, remove_stopwords):

@@ -4,6 +4,8 @@ from bs4 import BeautifulSoup
 import numpy as np
 from data_tools import preprocess_dataset, get_output_name
 import os
+from sklearn.datasets import fetch_20newsgroups
+
 
 def load_polarity_data(data_files, max_size=None):
     data = []
@@ -44,12 +46,14 @@ def load_twitter_data(data_path, max_size=None):
     return data
 
 
-def load_20_news_data(data_folder, max_size=None):
-    target_names = os.listdir(os.getcwd(data_folder))
-    print target_names
-    # for dir_name in target_names:
-    #     for filename in os.listdir(os.getcwd(dir_name)):
-    #         pass
+def load_20_news_data(data_folder=None, max_size=None):
+    newsgroups = fetch_20newsgroups(subset='all', shuffle=True, random_state=100,
+                                    remove=('headers', 'footers', 'quotes'))
+    data = pd.DataFrame({"text" : newsgroups.data, "label" : newsgroups.target})
+    if max_size is not None:
+        data = data[0:max_size]
+    return data
+
 
 models = {"mr_100": "./models/100features_40minwords_10context",
           "google_300": "./models/GoogleNews-vectors-negative300.bin"}
@@ -59,7 +63,7 @@ data_files = {"twitter": "./data/tweets/Sentiment Analysis Dataset.csv",
               "mr_kaggle": "./data/MR_kaggle/labeledTrainData.tsv",
               "polarity": ["./data/rt-polaritydata/rt-polarity.pos",
                            "./data/rt-polaritydata/rt-polarity.neg"],
-              "20_news": "./data/20news-bydate"}
+              "20_news": None}
 
 loaders = {"twitter": load_twitter_data,
            "mr_kaggle": load_reviews_data,
@@ -69,8 +73,8 @@ loaders = {"twitter": load_twitter_data,
 
 if __name__ == "__main__":
     max_size = None
-    model_name = "google_300"
+    model_name = "mr_100"
     dataset_name = "20_news"
-    # preprocess_dataset(models[model_name], data_files[dataset_name], loaders[dataset_name],
-    #                    output=get_output_name(dataset_name, model_name, max_size), max_size=max_size)
-    load_20_news_data(data_files[dataset_name])
+    preprocess_dataset(models[model_name], data_files[dataset_name], loaders[dataset_name],
+                       output=get_output_name(dataset_name, model_name, max_size), max_size=max_size)
+

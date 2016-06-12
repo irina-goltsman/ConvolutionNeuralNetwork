@@ -9,18 +9,18 @@ from sklearn.cross_validation import KFold
 from sklearn.cross_validation import cross_val_score
 from data_tools import add_idx_features
 from CNNTextClassifier import CNNTextClassifier
-from data_tools import get_output_name, words_count
+from data_tools import get_output_name, words_count, check_all_sentences_have_one_dim
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s',
                     level=logging.INFO)
 
 
-def train_and_test_cross_valid(data_file, n_epochs=10, n_folds=10,
-                               non_static=False, word_embedding="-word2vec", early_stop=True):
+def train_and_test_cross_valid(data_file, n_epochs=10, non_static=True,
+                               word_embedding="-word2vec", early_stop=True, valid_frequency=4):
     print "loading data...",
     x = cPickle.load(open(data_file, "rb"))
     data, w2v_matrix, random_matrix, word_idx_map, vocab = x[0], x[1], x[2], x[3], x[4]
-    print "data loadeЙЦd!"
+    print "data loaded!"
     print "%d samples." % len(data)
     if word_embedding == "-rand":
         print "using: random vectors"
@@ -33,20 +33,26 @@ def train_and_test_cross_valid(data_file, n_epochs=10, n_folds=10,
     dim = len(word_vect[0])
     print "word's dim = %d" % dim
     max_l = max(data["text"].apply(words_count))
-    print "max length of text = %d" % max_l
+    print "max length of text = %d words" % max_l
     data = add_idx_features(data, word_idx_map, max_l=max_l, k=dim, filter_h=5)
     print data["idx_features"][0]
 
-    clf = CNNTextClassifier(word_vect, learning_rate=0.1, seed=0, L2_reg=0.1,
-                            windows=[4, 5, 6], n_filters=10, k_max=1, activation='iden',
-                            word_dimension=dim, n_epochs=n_epochs, non_static=non_static)
+    assert check_all_sentences_have_one_dim(data["idx_features"])
+    sentence_len = len(data["idx_features"][0])
+
+    clf = CNNTextClassifier(vocab_size=len(word_vect), word_embedding=word_vect,
+                            word_dimension=len(word_vect[0]), sentence_len=sentence_len,
+                            batch_size=50, non_static=non_static, learning_rate=0.1,
+                            n_epochs=n_epochs, seed=0)
+
+    print clf.get_params_as_string()
 
     # kf = KFold(len(data), n_folds=n_folds, shuffle=True, random_state=0)
     # results = cross_val_score(clf, data["idx_features"], data["label"], cv=kf, n_jobs=1,
     #                           fit_params={'early_stop': early_stop})
     # mean_score = str(np.mean(results))
     try:
-        clf.fit(data["idx_features"], data["label"], early_stop=early_stop)
+        clf.fit(data["idx_features"], data["label"], early_stop=early_stop, valid_frequency=valid_frequency)
     except:
         new_state_path = "./cnn_states/state_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
         print "Saving state to '%s'..." % new_state_path
@@ -69,7 +75,7 @@ def train_and_test_cross_valid(data_file, n_epochs=10, n_folds=10,
 if __name__ == "__main__":
     start_time = time.time()
     model_name = "mr_100"
-    dataset_name = "mr_kaggle"
+    dataset_name = "polarity"
     train_and_test_cross_valid(data_file=get_output_name(dataset_name, model_name), n_epochs=15,
-                               n_folds=10, non_static=False, early_stop=False)
+                               non_static=True, early_stop=False, valid_frequency=2)
     print("--- %s seconds ---" % (time.time() - start_time))

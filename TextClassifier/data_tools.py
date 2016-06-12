@@ -11,6 +11,14 @@ import cPickle
 from gensim.models import Word2Vec
 
 
+def check_all_sentences_have_one_dim(X):
+    sentence_len = len(X[0])
+    for sentence in X:
+        if len(sentence) != sentence_len:
+            return False
+    return True
+
+
 def words_count(text):
     return len(text.split())
 

@@ -42,10 +42,10 @@ def build_cnn_for_texts(input_var, batch_size, sentence_len, vocab_size, word_di
     # TODO: вынести кусок ниже в отдельную функцию---------------
     layers = list()
     for window in windows[0]:
-        l_conv = lasagne.layers.conv.Conv2DLayer(
+        l_conv = CNN.Conv1DLayerSplitted(
             l_embedding,
             n_filters[0],
-            filter_size=(window, word_dimension / 3),
+            filter_hight=window,
             nonlinearity=lasagne.nonlinearities.linear
         )
         # Для фильтров разной ширины тут оставляем ровно k максимальных значений
@@ -61,7 +61,7 @@ def build_cnn_for_texts(input_var, batch_size, sentence_len, vocab_size, word_di
         l_conv = lasagne.layers.conv.Conv2DLayer(
             l_concat1,
             n_filters[1],
-            filter_size=(window, word_dimension / 3),
+            filter_size=(window, word_dimension),
             nonlinearity=lasagne.nonlinearities.linear
         )
         # Для фильтров разной ширины тут оставляем ровно k_top максимальных значений

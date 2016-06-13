@@ -153,18 +153,18 @@ def preprocess_dataset(model_path, data_path, load_function, output="prepared_da
 
 
 
-def add_idx_features(data, word_idx_map, max_l=51, k=300, filter_h=5):
+def add_idx_features(data, word_idx_map, max_l=51, filter_h=5):
     """
     Transforms sentences into a 2-d matrix.
     """
     data_features = pd.Series([[]], index=data.index)
     for i in data.index:
-        data_features[i] = get_idx_from_sent(data["text"][i], word_idx_map, max_l, k, filter_h)
+        data_features[i] = get_idx_from_sent(data["text"][i], word_idx_map, max_l, filter_h)
     data["idx_features"] = data_features
     return data
 
 
-def get_idx_from_sent(sent, word_idx_map, max_l=51, k=300, filter_h=5):
+def get_idx_from_sent(sent, word_idx_map, max_l=51, filter_h=5):
     """
     Transforms sentence into a list of indices. Pad with zeroes.
     """

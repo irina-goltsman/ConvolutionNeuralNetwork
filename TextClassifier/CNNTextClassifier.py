@@ -28,10 +28,13 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 #TODO: в датасете MR бывают совсем длинные тексты, возможно выравнивание по длине - не лучшая идея
 #TODO: почему-то с word_dim = 100 обучается, а с word_dim = 300 - нет.
 # mode=NanGuardMode - для дебага нанов, поняла что [nvcc] fastmath=True - вызывает nan!
-
+# TODO: понять, почему так медленно обучается, по сравнению с DCNN
+# TODO: отстойнейше - не сохраняются state - точнее сохраняются, но после загрузки параметров - результат низкий снова (нулевой прям)
+# TODO: возможно get_all_params в lasagne делает не то, что я лумаю
+# TODO: добавить folding из статьи
 
 class CNNTextClassifier(BaseEstimator):
-    def __init__(self, vocab_size, word_dimension=100, word_embedding=None, non_static=True,
+    def __init__(self, vocab_size=None, word_dimension=100, word_embedding=None, non_static=True,
                  batch_size=100, sentence_len=None, n_out=2,
                  windows=((5, 6), (4,)), n_filters=(10, 25), n_hidden=10, activations=('tanh', 'tanh'),
                  dropout=0.5, L2_regs=(0.0001/2, 0.00003/2, 0.000003/2, 0.0001/2),
@@ -132,9 +135,11 @@ class CNNTextClassifier(BaseEstimator):
         l2_layers = []
         for layer in lasagne.layers.get_all_layers(self.network):
             if isinstance(layer, (CNN.embeddings.SentenceEmbeddingLayer,
-                                  lasagne.layers.conv.Conv1DLayer,
+                                  CNN.Conv1DLayerSplitted,
+                                  lasagne.layers.conv.Conv2DLayer,
                                   lasagne.layers.DenseLayer)):
                 l2_layers.append(layer)
+        print "num of l2_layers is %d" % len(l2_layers)
 
         train_prediction = lasagne.layers.get_output(self.network, self.x)
         loss_train = lasagne.objectives.aggregate(
@@ -224,7 +229,7 @@ class CNNTextClassifier(BaseEstimator):
         return X_new, y_new
 
     # TODO: разбери эту огромную функцию на маленькие читабельные части
-    def fit(self, x_train, y_train, n_epochs=None, validation_part=0.1,
+    def fit(self, x_train, y_train, model_path=None, n_epochs=None, validation_part=0.1,
             valid_frequency=4, early_stop=False):
         """ Fit model
         :type x_train: 2d массив из int
@@ -275,11 +280,14 @@ class CNNTextClassifier(BaseEstimator):
         if not self.is_ready_to_train:
             self.ready_to_train(x_train, y_train, x_valid, y_valid)
 
+        if model_path is not None:
+            self.load(model_path)
+
         if n_epochs is not None:
             self.n_epochs = int(n_epochs)
 
         epoch = 0
-        best_valid_loss, best_valid_score, best_iter_num = np.inf, 0, 0
+        best_valid_score, best_iter_num = 0, 0
         # early-stopping parameters
         # TODO: разберись каким выбрать этот параметр
         valid_frequency = min(valid_frequency, num_train_batches - 1)
@@ -295,23 +303,23 @@ class CNNTextClassifier(BaseEstimator):
             indices = rng.permutation(num_train_batches)
             for cur_idx, real_idx in enumerate(indices):
                 iter = (epoch - 1) * num_train_batches + cur_idx
-                train_cost += self.train_model(real_idx)
+                cur_train_cost = self.train_model(real_idx)
+                train_cost += cur_train_cost
+                print "global_iter %d, epoch %d, batch %d, cur train cost = %f, mean train cost = %f" %\
+                      (iter, epoch, cur_idx, cur_train_cost, train_cost / (cur_idx + 1))
 
                 if iter % valid_frequency == 0:
-                    valid_loss = np.mean([self.val_loss(i) for i in xrange(num_val_batches)])
                     valid_score = np.mean([self.val_score(i) for i in xrange(num_val_batches)])
-                    # выведу результаты:
-                    print "Training: cur_idx = %d, real_idx = %d, mean train cost = %f" % \
-                          (cur_idx, real_idx, train_cost / (cur_idx + 1))
-                    print "global_iter %d, epoch %d, batch %d: mean valid loss: %f, valid score: %f" \
-                          % (iter, epoch, cur_idx, float(valid_loss), float(valid_score))
+                    # выведу результаты валидации:
+                    print "------------valid score: %f------------" \
+                          % (float(valid_score))
 
-                    if early_stop and (valid_loss * improvement_threshold < best_valid_loss):
+                    if early_stop and (valid_score > improvement_threshold * best_valid_score):
                         patience = max(patience, iter * patience_increase)
                         print "new patience = %d" % patience
 
-                    if valid_loss < best_valid_loss or valid_score > best_valid_score:
-                        best_valid_loss = valid_loss
+                    if valid_score > best_valid_score:
+                        best_valid_score = valid_score
                         best_iter_num = iter
 
                     # TODO: адекватно ли прерываться на середине эпохи?
@@ -323,13 +331,12 @@ class CNNTextClassifier(BaseEstimator):
                         break
             # Конец эпохи:
             train_score = np.mean([self.train_score(i) for i in xrange(num_train_batches)])
-            print "train_score = %f" % train_score
             valid_score = np.mean([self.val_score(i) for i in xrange(num_val_batches)])
             print "Epoch %d finished. Training time: %.2f secs" % (epoch, time.time()-start_time)
             print "Train score = %f. Valid score = %f." % (float(train_score), float(valid_score))
 
         print "OPTIMIZATION COMPLETE."
-        print "Best valid loss: %f" % best_valid_loss
+        print "Best valid score: %f" % best_valid_score
         print "Best iter num: %d, best epoch: %d" % (best_iter_num, best_iter_num // num_train_batches)
 
     def predict(self, data):
@@ -401,8 +408,8 @@ class CNNTextClassifier(BaseEstimator):
             self.__class__ = cc
         else:
             params = self.get_params()  # sklearn.BaseEstimator
-        if hasattr(self, 'network'):
-            weights = self.get_all_param_values()
+        if hasattr(self, 'network') and self.is_ready:
+            weights = self.get_all_weights_values()
         else:
             weights = []
         state = (params, weights)
@@ -423,13 +430,15 @@ class CNNTextClassifier(BaseEstimator):
             oc = self.orig_class
             self.__class__ = oc
             self.set_params(**params)
-            self.ready()
-            self.set_all_param_values(weights)
+            if not self.is_ready:
+                self.ready()
+            self.set_all_weights_values(weights)
             self.__class__ = cc
         else:
             self.set_params(**params)
-            self.ready()
-            self.set_all_param_values(weights)
+            if not self.is_ready:
+                self.ready()
+            self.set_all_weights_values(weights)
 
     def load(self, path):
         """ Загрузить параметры модели из файла. """
@@ -442,20 +451,20 @@ class CNNTextClassifier(BaseEstimator):
         with open(path, 'w') as f:
             pickle.dump(self.__getstate__(), f)
 
-    def set_all_param_values(self, weights):
+    def set_all_weights_values(self, weights):
         if hasattr(self, 'network'):
             if len(weights) > 0:
                 lasagne.layers.set_all_param_values(self.network, weights)
             else:
-                print "Error in function 'set_all_param_values': there is no weights"
+                print "Error in function 'set_all_weights_values': there is no weights"
         else:
-            print "Error in function 'set_all_param_values': there is no network"
+            print "Error in function 'set_all_weights_values': there is no network"
 
-    def get_all_param_values(self):
+    def get_all_weights_values(self):
         if hasattr(self, 'network'):
             return lasagne.layers.get_all_param_values(self.network)
         else:
-            print "Error in function 'get_all_param_values': there is no network yet - call 'ready' before it."
+            print "Error in function 'get_all_weights_values': there is no network yet - call 'ready' before it."
 
     def get_params_as_string(self):
         result_str = list()

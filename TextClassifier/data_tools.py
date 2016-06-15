@@ -5,10 +5,21 @@ import numpy as np
 import pandas as pd
 import re
 from nltk.corpus import stopwords
-from sklearn.feature_extraction.text import CountVectorizer
 import time
 import cPickle
 from gensim.models import Word2Vec
+from sklearn.feature_extraction.text import TfidfTransformer
+from sklearn.feature_extraction.text import CountVectorizer
+
+
+def get_bag_of_words(data, min_df=1):
+    vectorizer = CountVectorizer(min_df=min_df)
+    return vectorizer.fit_transform(data)
+
+
+def get_tfidf(data_counts):
+    tfidf_transformer = TfidfTransformer()
+    return tfidf_transformer.fit_transform(data_counts)
 
 
 def check_all_sentences_have_one_dim(X):

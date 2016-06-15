@@ -3,7 +3,6 @@ import pandas as pd
 from bs4 import BeautifulSoup
 import numpy as np
 from data_tools import preprocess_dataset, get_output_name
-import os
 from sklearn.datasets import fetch_20newsgroups
 
 
@@ -74,7 +73,7 @@ loaders = {"twitter": load_twitter_data,
 if __name__ == "__main__":
     max_size = None
     model_name = "mr_100"
-    dataset_name = "20_news"
+    dataset_name = "polarity"
     preprocess_dataset(models[model_name], data_files[dataset_name], loaders[dataset_name],
                        output=get_output_name(dataset_name, model_name, max_size), max_size=max_size)
 

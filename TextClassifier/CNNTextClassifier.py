@@ -5,7 +5,6 @@ import numpy as np
 from sklearn.base import BaseEstimator
 import cPickle as pickle
 import theano
-# from theano.tensor.nnet import conv
 from pandas.core.series import Series
 from sklearn.cross_validation import train_test_split
 import time
@@ -111,7 +110,7 @@ class CNNTextClassifier(BaseEstimator):
         self.network = build_1cnn(input_var=self.x, batch_size=self.batch_size,
                                   sentence_len=self.sentence_len, vocab_size=self.vocab_size,
                                   word_dimension=self.word_dimension, word_embedding=self.word_embedding,
-                                  non_static=self.non_static, n_hidden=self.n_hidden,
+                                  non_static=self.non_static,  # n_hidden=self.n_hidden
                                   windows=self.windows, k_top=self.k_top, n_filters=self.n_filters,
                                   activations=self.activations, dropout=self.dropout, n_out=self.n_out)
 
@@ -149,7 +148,8 @@ class CNNTextClassifier(BaseEstimator):
                                                                                lasagne.regularization.l1)
 
         all_params = lasagne.layers.get_all_params(self.network)
-        updates = lasagne.updates.adagrad(loss_train, all_params, self.learning_rate)
+        updates = lasagne.updates.adadelta(loss_train, all_params, self.learning_rate)
+        # updates = lasagne.updates.adam(loss_train, all_params)
 
         # self.loss_eval = lasagne.objectives.categorical_crossentropy(self.p_y_given_x, self.y)
         self.correct_predictions = T.eq(self.y_pred, self.y)

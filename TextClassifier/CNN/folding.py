@@ -21,7 +21,6 @@ class FoldingLayer(Layer):
         # суммирую 2 колонки
         summed = T.sum(long_cols, axis=3, keepdims=True)
         # reshape them back
-        folded_output = T.reshape(summed, (self.input_shape[0], self.input_shape[1],
-                                           self.input_shape[2], self.input_shape[3]/2))
+        folded_output = T.reshape(summed, (self.input_shape[0], self.input_shape[1], -1, self.input_shape[3]/2))
 
         return folded_output

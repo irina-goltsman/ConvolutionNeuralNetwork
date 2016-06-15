@@ -10,14 +10,14 @@ from pandas.core.series import Series
 from sklearn.cross_validation import train_test_split
 import time
 import warnings
-from network import *
+from networks import *
 from data_tools import check_all_sentences_have_one_dim
+from lasagne.random import set_rng
 
 theano.config.exception_verbosity = 'high'
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 #TODO: юзать больше карт: from 100 to 600
-#TODO: 4. добавить возможность изменять векторное представление слов в процессе обучения
 #TODO: заюзать glove вместо/вместе word2vec
 #TODO: попробовать разные активационные функции, в том числе Ident
 #TODO: 5. добавить dropout-слой - "use a small dropout rate(0.0-0.5) and a large max norm constraint"
@@ -28,7 +28,6 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 #TODO: в датасете MR бывают совсем длинные тексты, возможно выравнивание по длине - не лучшая идея
 #TODO: почему-то с word_dim = 100 обучается, а с word_dim = 300 - нет.
 # mode=NanGuardMode - для дебага нанов, поняла что [nvcc] fastmath=True - вызывает nan!
-# TODO: понять, почему так медленно обучается, по сравнению с DCNN
 # TODO: отстойнейше - не сохраняются state - точнее сохраняются, но после загрузки параметров - результат низкий снова (нулевой прям)
 # TODO: возможно get_all_params в lasagne делает не то, что я лумаю
 # TODO: добавить folding из статьи
@@ -37,7 +36,7 @@ class CNNTextClassifier(BaseEstimator):
     def __init__(self, vocab_size=None, word_dimension=100, word_embedding=None, non_static=True,
                  batch_size=100, sentence_len=None, n_out=2,
                  windows=((5, 6), (4,)), n_filters=(10, 25), n_hidden=10, activations=('tanh', 'tanh'),
-                 dropout=0.5, L2_regs=(0.0001/2, 0.00003/2, 0.000003/2, 0.0001/2),
+                 dropout=0.5, L1_regs=(0.0001 / 2, 0.00003 / 2, 0.000003 / 2, 0.0001 / 2),
                  k_top=1, learning_rate=0.1, n_epochs=3, seed=0):
         """
         :param vocab_size: размер словаря
@@ -55,7 +54,7 @@ class CNNTextClassifier(BaseEstimator):
         :type activations: tuple of string, варианты: 'tanh', 'sigmoid', 'relu', 'cappedrelu', 'iden'
         :param activations: виды активационных функций
         :param dropout: параметр для dropout слоя
-        :param L2_regs: параметры для регуляризации
+        :param L1_regs: параметры для регуляризации
         :type k_top: int (>=1)
         :param k_top: параметр для итогового k-max-pooling слоя
         :param learning_rate: темп обучения
@@ -75,7 +74,7 @@ class CNNTextClassifier(BaseEstimator):
         self.n_hidden = n_hidden
         self.activations = activations
         self.dropout = dropout
-        self.L2_regs = L2_regs
+        self.L1_regs = L1_regs
         self.is_ready = False
         self.is_ready_to_train = False
         self.k_top = k_top
@@ -105,21 +104,23 @@ class CNNTextClassifier(BaseEstimator):
         # Результирующие классы для каждого предложения в batch
         self.y = T.ivector('y')
 
-        print "CNN building..."
-        self.network = build_cnn_for_texts(input_var=self.x, batch_size=self.batch_size,
-                                           sentence_len=self.sentence_len, vocab_size=self.vocab_size,
-                                           word_dimension=self.word_dimension, word_embedding=self.word_embedding,
-                                           non_static=self.non_static,
-                                           windows=self.windows, k_top=self.k_top, n_filters=self.n_filters,
-                                           activations=self.activations, dropout=self.dropout, n_out=self.n_out)
+        self.rng = np.random.RandomState(self.seed)
+        set_rng(self.rng)
 
-        # ключевое слово deterministic отключает стохастическое поведение
-        # например, убирает dropout
+        print "CNN building..."
+        self.network = build_1cnn(input_var=self.x, batch_size=self.batch_size,
+                                  sentence_len=self.sentence_len, vocab_size=self.vocab_size,
+                                  word_dimension=self.word_dimension, word_embedding=self.word_embedding,
+                                  non_static=self.non_static, n_hidden=self.n_hidden,
+                                  windows=self.windows, k_top=self.k_top, n_filters=self.n_filters,
+                                  activations=self.activations, dropout=self.dropout, n_out=self.n_out)
+
+        # ключевое слово deterministic отключает стохастическое поведение, например, убирает dropout
         self.p_y_given_x = lasagne.layers.get_output(self.network, self.x, deterministic=True)
         self.y_pred = T.argmax(self.p_y_given_x, axis=1)
 
-        self.predict_wrap = theano.function(inputs=[self.x], outputs=self.y_pred)
-        self.predict_proba_wrap = theano.function(inputs=[self.x], outputs=self.p_y_given_x)
+        self.predict_wrap = theano.function(inputs=[self.x], outputs=self.y_pred, allow_input_downcast=True)
+        self.predict_proba_wrap = theano.function(inputs=[self.x], outputs=self.p_y_given_x, allow_input_downcast=True)
         print "CNN building finished"
 
         self.is_ready = True
@@ -132,25 +133,25 @@ class CNNTextClassifier(BaseEstimator):
 
         # Выпишу слои к которым должна применяться L2 регуляризация
         print "Preparing for training..."
-        l2_layers = []
+        l1_layers = []
         for layer in lasagne.layers.get_all_layers(self.network):
             if isinstance(layer, (CNN.embeddings.SentenceEmbeddingLayer,
                                   CNN.Conv1DLayerSplitted,
                                   lasagne.layers.conv.Conv2DLayer,
                                   lasagne.layers.DenseLayer)):
-                l2_layers.append(layer)
-        print "num of l2_layers is %d" % len(l2_layers)
+                l1_layers.append(layer)
+        print "num of l1_layers is %d" % len(l1_layers)
 
-        train_prediction = lasagne.layers.get_output(self.network, self.x)
+        train_prediction = lasagne.layers.get_output(self.network, self.x, deterministic=False)
         loss_train = lasagne.objectives.aggregate(
             lasagne.objectives.categorical_crossentropy(train_prediction, self.y), mode='mean')\
-                     + lasagne.regularization.regularize_layer_params_weighted(dict(zip(l2_layers, self.L2_regs)),
-                                                                               lasagne.regularization.l2)
+                     + lasagne.regularization.regularize_layer_params_weighted(dict(zip(l1_layers, self.L1_regs)),
+                                                                               lasagne.regularization.l1)
 
         all_params = lasagne.layers.get_all_params(self.network)
         updates = lasagne.updates.adagrad(loss_train, all_params, self.learning_rate)
 
-        self.loss_eval = lasagne.objectives.categorical_crossentropy(self.p_y_given_x, self.y)
+        # self.loss_eval = lasagne.objectives.categorical_crossentropy(self.p_y_given_x, self.y)
         self.correct_predictions = T.eq(self.y_pred, self.y)
 
         index = T.lscalar()
@@ -160,11 +161,11 @@ class CNNTextClassifier(BaseEstimator):
                                                self.y: y_train[index * self.batch_size: (index + 1) * self.batch_size]},
                                            allow_input_downcast=True)
 
-        self.val_loss = theano.function([index], outputs=self.loss_eval,
-                                        givens={
-                                            self.x: x_valid[index * self.batch_size: (index + 1) * self.batch_size],
-                                            self.y: y_valid[index * self.batch_size: (index + 1) * self.batch_size]},
-                                        allow_input_downcast=True)
+        # self.val_loss = theano.function([index], outputs=self.loss_eval,
+        #                                 givens={
+        #                                     self.x: x_valid[index * self.batch_size: (index + 1) * self.batch_size],
+        #                                     self.y: y_valid[index * self.batch_size: (index + 1) * self.batch_size]},
+        #                                 allow_input_downcast=True)
 
         self.val_score = theano.function([index], outputs=self.correct_predictions,
                                          givens={
@@ -251,8 +252,16 @@ class CNNTextClassifier(BaseEstimator):
         assert min(y_train) >= 0
         assert len(x_train) == len(y_train)
 
-        rng = np.random.RandomState(self.seed)
-        x_train, y_train = self.extend_to_batch_size(x_train, y_train, self.batch_size, rng)
+        # подготовим CNN
+        if not self.is_ready:
+            self.ready()
+
+        if isinstance(x_train, Series):
+            x_train = x_train.values.tolist()
+        if isinstance(y_train, Series):
+            y_train = y_train.values.tolist()
+
+        x_train, y_train = self.extend_to_batch_size(x_train, y_train, self.batch_size, self.rng)
 
         num_batches = len(x_train) / self.batch_size
         num_val_batches = int(np.floor(num_batches * validation_part))
@@ -260,17 +269,13 @@ class CNNTextClassifier(BaseEstimator):
 
         x_train, x_valid, y_train, y_valid = train_test_split(x_train, y_train,
                                                               test_size=num_val_batches * self.batch_size,
-                                                              random_state=rng)
+                                                              random_state=self.rng)
         assert len(x_valid) % self.batch_size == 0
 
         if isinstance(y_valid, Series):
             y_valid = y_valid.reset_index(drop=True)
         if isinstance(x_valid, Series):
             x_valid = x_valid.reset_index(drop=True)
-
-        # подготовим CNN
-        if not self.is_ready:
-            self.ready()
 
         x_train, y_train = self.shared_dataset(x_train, y_train)
         x_valid, y_valid = self.shared_dataset(x_valid, y_valid)
@@ -289,26 +294,26 @@ class CNNTextClassifier(BaseEstimator):
         epoch = 0
         best_valid_score, best_iter_num = 0, 0
         # early-stopping parameters
-        # TODO: разберись каким выбрать этот параметр
         valid_frequency = min(valid_frequency, num_train_batches - 1)
         print "visualization frequency: %d batches" % valid_frequency
         patience = num_train_batches * 2  # look as this many examples regardless
-        patience_increase = 1.5  # wait this much longer when a new best is found
-        improvement_threshold = 0.9  # a relative improvement of this much is
+        patience_increase = 2.0  # wait this much longer when a new best is found
+        improvement_threshold = 0.995  # a relative improvement of this much is
         stop = False
         while (epoch < self.n_epochs) and (not stop):
             start_time = time.time()
             epoch += 1
             train_cost = 0
-            indices = rng.permutation(num_train_batches)
+            indices = self.rng.permutation(num_train_batches)
             for cur_idx, real_idx in enumerate(indices):
                 iter = (epoch - 1) * num_train_batches + cur_idx
                 cur_train_cost = self.train_model(real_idx)
                 train_cost += cur_train_cost
-                print "global_iter %d, epoch %d, batch %d, cur train cost = %f, mean train cost = %f" %\
-                      (iter, epoch, cur_idx, cur_train_cost, train_cost / (cur_idx + 1))
 
-                if iter % valid_frequency == 0:
+                if iter > 0 and iter % valid_frequency == 0:
+                    print "global_iter %d, epoch %d, batch %d, mean train cost = %f" % \
+                          (iter, epoch, cur_idx, train_cost / valid_frequency)
+                    train_cost = 0
                     valid_score = np.mean([self.val_score(i) for i in xrange(num_val_batches)])
                     # выведу результаты валидации:
                     print "------------valid score: %f------------" \
@@ -337,7 +342,7 @@ class CNNTextClassifier(BaseEstimator):
 
         print "OPTIMIZATION COMPLETE."
         print "Best valid score: %f" % best_valid_score
-        print "Best iter num: %d, best epoch: %d" % (best_iter_num, best_iter_num // num_train_batches)
+        print "Best iter num: %d, best epoch: %d" % (best_iter_num, best_iter_num // num_train_batches + 1)
 
     def predict(self, data):
         """
@@ -348,7 +353,7 @@ class CNNTextClassifier(BaseEstimator):
         :return массив - i-ый элемент - наиболее вероятный класс для i-го текста
         """
         if isinstance(data, Series):
-            data = data.reset_index(drop=True)
+            data = data.values.tolist()
 
         assert len(data) > 0
         sentence_len = len(data[0])
@@ -356,15 +361,14 @@ class CNNTextClassifier(BaseEstimator):
         num_batches = len(data) // self.batch_size
         num_rest = len(data) % self.batch_size
         if num_batches > 0:
-            predictions = [list(self.predict_proba_wrap(data[i * self.batch_size: (i + 1) * self.batch_size]))
+            predictions = [self.predict_wrap(data[i * self.batch_size: (i + 1) * self.batch_size])
                            for i in range(num_batches)]
         else:
             predictions = []
         if num_rest > 0:
             z = np.zeros((self.batch_size, sentence_len))
             z[0:num_rest] = data[num_batches * self.batch_size: num_batches * self.batch_size + num_rest]
-            predictions.append(self.predict_proba_wrap(z)[0:num_rest])
-
+            predictions.append(self.predict_wrap(z)[0:num_rest])
         return np.hstack(predictions).flatten()
 
     def predict_proba(self, data):
@@ -481,7 +485,7 @@ class CNNTextClassifier(BaseEstimator):
         result_str.append("k_top = %d" % self.k_top)
         result_str.append("activation = %s" % str(self.activations))
         result_str.append("dropout = %2f" % self.dropout)
-        result_str.append("L2_regs = %s" % str(self.L2_regs))
+        result_str.append("L1_regs = %s" % str(self.L1_regs))
 
         result_str.append("batch_size = %d" % self.batch_size)
         result_str.append("learning_rate = %2f" % self.learning_rate)

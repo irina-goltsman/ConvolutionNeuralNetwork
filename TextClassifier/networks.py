@@ -21,7 +21,7 @@ def parse_activation(name):
 
 
 def build_1cnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, word_embedding,
-               non_static, windows, n_filters, activations, k_top, dropout, n_hidden, n_out):
+               non_static, windows, n_filters, activations, k_top, dropout, n_out):
     l_in = lasagne.layers.InputLayer(
         shape=(batch_size, sentence_len),
         input_var=input_var
@@ -39,29 +39,38 @@ def build_1cnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, 
 
     layers = list()
     for window in windows[0]:
+        if activations[0] == 'iden':
+            b1, b2 = None, lasagne.init.Constant(0.)
+        else:
+            b1, b2 = lasagne.init.Constant(0.), None
+
         l_conv = lasagne.layers.conv.Conv2DLayer(
             l_embedding,
             n_filters[0],
+            b=b1,
             filter_size=(window, word_dimension),
-            nonlinearity=lasagne.nonlinearities.linear
+            nonlinearity=parse_activation(activations[0])
         )
         # Для фильтров разной ширины тут оставляем ровно k максимальных значений
         l_pool = CNN.pooling.KMaxPoolLayer(l_conv, k=k_top)
-        l_nonlinear = lasagne.layers.NonlinearityLayer(l_pool, nonlinearity=parse_activation(activations[0]))
-        layers.append(l_nonlinear)
+        l_conv_out = lasagne.layers.BiasLayer(l_pool, b=b2)
+        layers.append(l_conv_out)
 
     l_concat1 = lasagne.layers.ConcatLayer(layers, axis=1)
 
     l_dropout2 = lasagne.layers.DropoutLayer(l_concat1, p=dropout)
-
-    l_dense = lasagne.layers.DenseLayer(
-        l_dropout2,
-        num_units=n_hidden,
-        nonlinearity=lasagne.nonlinearities.sigmoid
-    )
+    # TODO: добавить возможность создавать много полносвязных слоёв, по параметру hidden_units как у Кима
+    # gain='relu' or sqrt(2) for rectified linear units
+    # gain=sqrt(2/(1+alpha**2)) for leaky rectified linear units
+    # l_dense = lasagne.layers.DenseLayer(
+    #     l_dropout2,
+    #     W=lasagne.init.GlorotUniform(gain=1.0),
+    #     num_units=n_hidden,
+    #     nonlinearity=lasagne.nonlinearities.sigmoid
+    # )
 
     l_out = lasagne.layers.DenseLayer(
-        l_dense,
+        l_dropout2,
         num_units=n_out,
         nonlinearity=lasagne.nonlinearities.softmax
     )

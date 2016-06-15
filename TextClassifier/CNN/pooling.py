@@ -10,11 +10,10 @@ class KMaxPoolLayer(Layer):
         self.k = k
 
     def get_output_shape_for(self, input_shape):
-        return (input_shape[0], input_shape[1], self.k, input_shape[3])
+        return input_shape[0], input_shape[1], self.k, input_shape[3]
 
     def get_output_for(self, input, **kwargs):
         return self.kmaxpooling(input, self.k)
-
 
     def kmaxpooling(self,input,k):
         """
@@ -29,13 +28,16 @@ class KMaxPoolLayer(Layer):
         # не хочу терять порядок слов, поэтому ещё раз сортирую номера максимумов:
         args_of_k_max_sorted = T.sort(args_of_k_max, axis=2)
 
-        dim0 = T.arange(input.shape[0]).repeat(input.shape[1] * k * input.shape[3])
-        dim1 = T.arange(input.shape[1]).repeat(k * input.shape[3]).reshape((1, -1))\
-            .repeat(input.shape[0], axis=0).flatten()
+        # use nonsymbolic shape if possible
+        input_shape = self.input_shape
+        if any(s is None for s in input_shape):
+            input_shape = input.shape
+
+        dim0 = T.arange(input_shape[0]).repeat(input_shape[1] * k * input_shape[3])
+        dim1 = T.arange(input_shape[1]).repeat(k * input_shape[3]).reshape((1, -1))\
+            .repeat(input_shape[0], axis=0).flatten()
         dim2 = args_of_k_max_sorted.flatten()
-        dim3 = T.arange(input.shape[3]).reshape((1, -1))\
-            .repeat(input.shape[0] * input.shape[1] * k, axis=0).flatten()
+        dim3 = T.arange(input_shape[3]).reshape((1, -1))\
+            .repeat(input_shape[0] * input_shape[1] * k, axis=0).flatten()
 
-        return input[dim0, dim1, dim2, dim3].reshape((input.shape[0], input.shape[1], k, input.shape[3]))
-
-
+        return input[dim0, dim1, dim2, dim3].reshape((input_shape[0], input_shape[1], k, input_shape[3]))

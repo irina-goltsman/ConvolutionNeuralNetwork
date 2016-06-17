@@ -14,6 +14,7 @@ class SentenceEmbeddingLayer(Layer):
 
         if word_embedding is None:
             word_embedding = init.Normal()
+            # word_embedding = init.GlorotUniform(gain=1.0)
 
         self.W = self.add_param(word_embedding, (vocab_size, word_dimension), name="Words",
                                 trainable=non_static, regularizable=non_static)

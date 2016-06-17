@@ -23,7 +23,7 @@ def get_tfidf(data_counts):
 
 
 def check_all_sentences_have_one_dim(X):
-    sentence_len = len(X[0])
+    sentence_len = len(X[1])
     for sentence in X:
         if len(sentence) != sentence_len:
             return False
@@ -150,7 +150,7 @@ def preprocess_dataset(model_path, data_path, load_function, output="prepared_da
     print "Word dimensions = %d" % dim
     print "num words already in word2vec: " + str(len(word_vec))
 
-    # Расширяем модель неизвестными словами, рандомно докидывая вектора -0.25 до 0.25
+    # Расширяем word embedding модель неизвестными словами, рандомно докидывая вектора -0.25 до 0.25
     add_unknown_words(word_vec, vocabulary, dim)
     # W - матрица всех слов из модели word2vec и word_idx_map - словарь, по слову можно узнать id, чтобы вызвать W[id]
     W_matrix, word_idx_map = get_embedding_matrix(word_vec, dim)

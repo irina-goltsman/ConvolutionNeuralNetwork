@@ -39,7 +39,7 @@ def train_and_test_cross_valid(n_epochs=10, n_folds=10, non_static=False, word_e
     print data["idx_features"][0]
 
     clf = CNNTextClassifier.CNNTextClassifier(word_vect, learning_rate=0.1, seed=0, L2_reg=0.1,
-                                              windows=[4, 5, 6], n_filters=10, k_max=1, activation='tanh',
+                                              windows=[4, 5, 6], n_filters=10, k_top=1, activation='tanh',
                                               word_dimension=300, n_epochs=n_epochs, non_static=non_static)
 
     kf = KFold(len(data), n_folds=n_folds, shuffle=True, random_state=0)

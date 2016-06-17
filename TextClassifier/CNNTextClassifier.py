@@ -18,26 +18,33 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 #TODO: юзать больше карт: from 100 to 600
 #TODO: заюзать glove вместо/вместе word2vec
-#TODO: попробовать разные активационные функции, в том числе Ident
 #TODO: 5. добавить dropout-слой - "use a small dropout rate(0.0-0.5) and a large max norm constraint"
-#TODO: лучше юзай 1-max-pooling для предложений
-#TODO: ОБУЧАТЬ ПАЧКАМИ - лучше adam optimizations или хотя бы adagrad
-#TODO: реализовать 2х слойную модель с k-max-pooling.
 
 #TODO: в датасете MR бывают совсем длинные тексты, возможно выравнивание по длине - не лучшая идея
 #TODO: почему-то с word_dim = 100 обучается, а с word_dim = 300 - нет.
 # mode=NanGuardMode - для дебага нанов, поняла что [nvcc] fastmath=True - вызывает nan!
-# TODO: отстойнейше - не сохраняются state - точнее сохраняются, но после загрузки параметров - результат низкий снова (нулевой прям)
-# TODO: возможно get_all_params в lasagne делает не то, что я лумаю
-# TODO: добавить folding из статьи
+# TODO: возможно get_all_params в lasagne делает не то, что я предполагала
+
+# TODO: ================================6 подумать над реализацией character-level сети - 30мин
+# TODO: ================================сделать character-level сеть - 2ч ( переоценить время после пункта 6 )
+# TODO: 2 проверить, сохраняется ли state? - 5 мин
+# TODO: 3 протестить 1cnn на 20news - чисто эмпирически (макс 3 эпохи) - 30мин - 1.5ч
+# TODO: 5 протестить 20news на baselines - сравнить - 1ч
+# TODO: 7 я правильно понимаю, что 2-х слойная сеть вообще не обучается? - 15мин
+# TODO: 8 запустить baseline на twitter_google_300 - оценить примерное качество - 2ч
+# TODO: 9 обучить сетку 1cnn на twitter_google_300 - 10ч (ГДЕ ВЗЯТЬ СТОЛЬКО ВРЕМЕНИ???)
+# TODO: загрузить, почистить, пересобрать новый датасет - 3ч
+# TODO: нечего делать? занят процессор? - рефакторинг кода наше всё
+# TODO: убрать стоп слова и протестить на бейзлайнах ещё раз
 
 class CNNTextClassifier(BaseEstimator):
-    def __init__(self, vocab_size=None, word_dimension=100, word_embedding=None, non_static=True,
+    def __init__(self, clf_name='1cnn', vocab_size=None, word_dimension=100, word_embedding=None, non_static=True,
                  batch_size=100, sentence_len=None, n_out=2,
                  windows=((5, 6), (4,)), n_filters=(10, 25), n_hidden=10, activations=('tanh', 'tanh'),
                  dropout=0.5, L1_regs=(0.0001 / 2, 0.00003 / 2, 0.000003 / 2, 0.0001 / 2),
                  k_top=1, learning_rate=0.1, n_epochs=3, seed=0):
         """
+        :param clf_name: имя сети, доступно: '1cnn', 'dcnn'
         :param vocab_size: размер словаря
         :param word_dimension: размерность слов
         :type word_embedding: matrix 2d or None
@@ -61,6 +68,7 @@ class CNNTextClassifier(BaseEstimator):
         :param seed: начальное значение для генератора случайных чисел
         """
         self._estimator_type = "classifier"
+        self.clf_name = clf_name
         self.vocab_size = vocab_size
         self.word_dimension = word_dimension
         self.word_embedding = word_embedding
@@ -97,6 +105,15 @@ class CNNTextClassifier(BaseEstimator):
         else:
             raise NotImplementedError
 
+    @staticmethod
+    def get_clf_builder(name):
+        clf_builder_dict = {'1cnn': build_1cnn, 'dcnn': build_dcnn}
+        try:
+            builder = clf_builder_dict[name]
+        except KeyError:
+            raise NotImplementedError
+        return builder
+
     def ready(self):
         # Матрица входа, размера n_batch * n_sentence
         self.x = T.lmatrix('x')
@@ -107,12 +124,13 @@ class CNNTextClassifier(BaseEstimator):
         set_rng(self.rng)
 
         print "CNN building..."
-        self.network = build_1cnn(input_var=self.x, batch_size=self.batch_size,
-                                  sentence_len=self.sentence_len, vocab_size=self.vocab_size,
-                                  word_dimension=self.word_dimension, word_embedding=self.word_embedding,
-                                  non_static=self.non_static,  # n_hidden=self.n_hidden
-                                  windows=self.windows, k_top=self.k_top, n_filters=self.n_filters,
-                                  activations=self.activations, dropout=self.dropout, n_out=self.n_out)
+        clf_builder = self.get_clf_builder(self.clf_name)
+        self.network = clf_builder(input_var=self.x, batch_size=self.batch_size,
+                                   sentence_len=self.sentence_len, vocab_size=self.vocab_size,
+                                   word_dimension=self.word_dimension, word_embedding=self.word_embedding,
+                                   non_static=self.non_static,  # n_hidden=self.n_hidden
+                                   windows=self.windows, k_top=self.k_top, n_filters=self.n_filters,
+                                   activations=self.activations, dropout=self.dropout, n_out=self.n_out)
 
         # ключевое слово deterministic отключает стохастическое поведение, например, убирает dropout
         self.p_y_given_x = lasagne.layers.get_output(self.network, self.x, deterministic=True)
@@ -222,12 +240,10 @@ class CNNTextClassifier(BaseEstimator):
             if isinstance(X, Series):
                 X = X.values.tolist()
 
-            X_new = np.append(X, X_extra, axis=0)
-            y_new = np.append(y, y_extra, axis=0)
-        else:
-            X_new = X
-            y_new = y
-        return X_new, y_new
+            X = np.append(X, X_extra, axis=0)
+            y = np.append(y, y_extra, axis=0)
+
+        return X, y
 
     # TODO: разбери эту огромную функцию на маленькие читабельные части
     def fit(self, x_train, y_train, model_path=None, n_epochs=None, validation_part=0.1,
@@ -472,6 +488,7 @@ class CNNTextClassifier(BaseEstimator):
 
     def get_params_as_string(self):
         result_str = list()
+        result_str.append("clf_name = %s" % self.clf_name)
         result_str.append("vocab_size = %d" % self.vocab_size)
         result_str.append("word_dimension = %d" % self.word_dimension)
         result_str.append("non_static = " + str(self.non_static))

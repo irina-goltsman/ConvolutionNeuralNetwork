@@ -79,7 +79,7 @@ def to_train(path_to_model=None):
         else:
             print "bad change!"
     classifier = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0, window=[6], n_filters=50,
-                                                     k_max=1, activation='iden',
+                                                     k_top=1, activation='iden',
                                                      word_dimension=100,
                                                      model_path="../models/100features_40minwords_10context")
                                                      #model_path="../models/GoogleNews-vectors-negative300.bin")
@@ -143,7 +143,7 @@ def train_and_test_cross_folds(max_count=None, n_epochs=15):
         #TODO: не нужно каждый раз загружать новую модель, нужно добавить функцию заполнения
         # параметров модели рандомными значениями
         classifier = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0.1, windows=[4, 5, 6],
-                                                         n_filters=10, k_max=1, activation='iden',
+                                                         n_filters=10, k_top=1, activation='iden',
                                                          word_dimension=100,
                                                          model_path="../models/100features_40minwords_10context")
 
@@ -198,7 +198,7 @@ def train_and_test_cross_valid(max_count=None, n_epochs=15, n_folds=10):
     print "Translating reviews to raw text format was finished."
 
     clf = CNNTextClassifier.CNNTextClassifier(learning_rate=0.1, seed=0, L2_reg=0.1, windows=[4, 5, 6],
-                                              n_filters=10, k_max=1, activation='tanh',
+                                              n_filters=10, k_top=1, activation='tanh',
                                               word_dimension=100, n_epochs=n_epochs,
                                               model_path="../models/100features_40minwords_10context")
     kf = KFold(max_count, n_folds=n_folds, shuffle=True, random_state=0)

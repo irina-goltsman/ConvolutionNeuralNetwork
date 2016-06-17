@@ -114,16 +114,16 @@ def train_and_test_cross_valid(data_file, n_epochs, non_static, batch_size, k_to
     max_l = max(data["text"].apply(dt.words_count))
     print "max length of text = %d words" % max_l
     data = dt.add_idx_features(data, word_idx_map, max_l=max_l, filter_h=5)
-    print data["idx_features"][0]
 
     assert dt.check_all_sentences_have_one_dim(data["idx_features"])
     sentence_len = len(data["idx_features"][0])
+    n_out = max(data["label"])+1
 
     clf = CNNTextClassifier(vocab_size=len(w2v_matrix), word_embedding=word_vect,
                             word_dimension=word_dimentions, sentence_len=sentence_len, n_hidden=n_hidden,
                             windows=windows, n_filters=n_filters, k_top=k_top, activations=activations,
                             batch_size=batch_size, non_static=non_static, dropout=dropout, L1_regs=L1_regs,
-                            learning_rate=learning_rate, n_epochs=n_epochs, seed=seed)
+                            learning_rate=learning_rate, n_epochs=n_epochs, seed=seed, n_out=n_out)
 
     print clf.get_params_as_string()
 
@@ -148,12 +148,12 @@ def save_model(clf):
     new_state_path = "./cnn_states/state_" + datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
     print "Saving state to '%s'..." % new_state_path
     clf.save_state(new_state_path)
-    print clf.get_all_weights_values()
+    # print clf.get_all_weights_values()
 
 
-def train_and_save_model(data_file, n_epochs, non_static, batch_size, k_top, n_filters, windows, activations,
-                         word_embedding, early_stop, valid_frequency, learning_rate, seed, word_dimentions,
-                         dropout, L1_regs, n_hidden):
+def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, k_top, n_filters, windows,
+                         activations, word_embedding, early_stop, valid_frequency, learning_rate, seed,
+                         word_dimentions, dropout, L1_regs, n_hidden):
     print "loading data...",
     x = cPickle.load(open(data_file, "rb"))
     data, w2v_matrix, random_matrix, word_idx_map, vocab = x[0], x[1], x[2], x[3], x[4]
@@ -176,16 +176,16 @@ def train_and_save_model(data_file, n_epochs, non_static, batch_size, k_top, n_f
     max_l = max(data["text"].apply(dt.words_count))
     print "max length of text = %d words" % max_l
     data = dt.add_idx_features(data, word_idx_map, max_l=max_l, filter_h=5)
-    print data["idx_features"][0]
 
     assert dt.check_all_sentences_have_one_dim(data["idx_features"])
-    sentence_len = len(data["idx_features"][0])
+    sentence_len = len(data["idx_features"][1])
+    n_out = max(data["label"])+1
 
-    clf = CNNTextClassifier(vocab_size=len(w2v_matrix), word_embedding=word_vect,
+    clf = CNNTextClassifier(clf_name=clf_name, vocab_size=len(w2v_matrix), word_embedding=word_vect,
                             word_dimension=word_dimentions, sentence_len=sentence_len, n_hidden=n_hidden,
                             windows=windows, n_filters=n_filters, k_top=k_top, activations=activations,
                             batch_size=batch_size, non_static=non_static, dropout=dropout, L1_regs=L1_regs,
-                            learning_rate=learning_rate, n_epochs=n_epochs, seed=seed)
+                            learning_rate=learning_rate, n_epochs=n_epochs, seed=seed, n_out=n_out)
 
     print clf.get_params_as_string()
 
@@ -234,7 +234,7 @@ def train_and_test_model_cross_valid(data_file, clf, clf_params):
     # 'vect__min_df': np.arange(1, 10),
     # 'tfidf__sublinear_tf': (True, False),
 
-    gs_clf = GridSearchCV(text_clf, clf_params, n_jobs=2, cv=10, refit=False)
+    gs_clf = GridSearchCV(text_clf, clf_params, n_jobs=2, cv=10, refit=False, verbose=3)
     gs_clf.fit(data["text"], data["label"])
     write_results(data_file, clf.__class__.__name__, gs_clf)
 
@@ -250,24 +250,26 @@ def train_and_test_models_cross_valid():
     }
 
     MultinomialNB_params = {
-        'clf__alpha': np.arange(0.0, 2.0, 0.1),
-        'clf__fit_prior': (False, True),
+        'clf__alpha': np.arange(0.1, 2.0, 0.3),
+        'clf__fit_prior': (True, False),
     }
 
     LogisticRegression_params = {
         # 'clf__penalty': ('l2', 'l1'),
-        'clf__fit_intercept': (False, True),
+        # 'clf__fit_intercept': (False, True),
         'clf__solver': ('newton-cg', 'lbfgs', 'liblinear', 'sag'),
         # 'clf__dual': (True, False),
-        'clf__C': np.arange(0.5, 2.0, 0.1)
+        'clf__C': np.arange(1.0, 2.0, 0.2)
         # 'clf__multi_class': ('ovr', 'multinomial')
     }
 
-    clf_with_params = {SGDClassifier: SGDClassifier_params,
-                       MultinomialNB: MultinomialNB_params,
-                       LogisticRegression: LogisticRegression_params}
+    clf_with_params = {
+                       # SGDClassifier: SGDClassifier_params,
+                       MultinomialNB: MultinomialNB_params
+                       # LogisticRegression: LogisticRegression_params
+                      }
     model_name = "mr_100"
-    datasets = ("20_news", "mr_kaggle")  # TODO: добавь "twitter", уже провела обучение для "polarity"
+    datasets = ("20_news",)  # TODO: добавь "twitter", уже провела обучение для "polarity" and "mr_kaggle"
 
     for dataset_name in datasets:
         print "dataset '%s' is processing..." % dataset_name
@@ -281,25 +283,25 @@ def train_and_test_models_cross_valid():
 
 if __name__ == "__main__":
     start_time = time.time()
-    model_name = "mr_100"
-    dataset_name = "polarity"
-    # train_and_test_cross_valid(data_file=get_output_name(dataset_name, model_name), n_epochs=40, batch_size=4,
-    #                            non_static=True, early_stop=False, valid_frequency=300, word_embedding="-word2vec",
-    #                            learning_rate=0.1, k_top=4, n_filters=(6, 14), windows=((7,), (5,)), seed=0,
-    #                            word_dimentions=40, activations=('tanh', 'tanh'),
-    #                            dropout=0.5, L1_regs=(0.00001, 0.00003, 0.000003, 0.0001))
+    model_name = "google_300"
+    dataset_name = "twitter"
+    # train_and_save_model(clf_name='dcnn', data_file=dt.get_output_name(dataset_name, model_name),
+    #                      n_epochs=40, batch_size=20, non_static=True, early_stop=False, valid_frequency=20,
+    #                      word_embedding="-word2vec", learning_rate=1.0, k_top=4, n_filters=(6, 14),
+    #                      windows=((7,), (5,)), seed=0, word_dimentions=40, activations=('tanh', 'tanh'),
+    #                      dropout=0.2, L1_regs=(0.00001, 0.00003, 0.000003, 0.0001), n_hidden=100)
+    # #
+    train_and_save_model(clf_name='1cnn', data_file=dt.get_output_name(dataset_name, model_name),
+                         n_epochs=25, batch_size=50, non_static=True, early_stop=True, valid_frequency=20,
+                         word_embedding="-word2vec", learning_rate=0.5, k_top=1, n_filters=(100,),
+                         windows=((3, ),), seed=0, word_dimentions=None, activations=('relu',),
+                         dropout=0.5, L1_regs=(0.0, 0.00001, 0.00001, 0.00001, 0.0001, 0.0001), n_hidden=100)
 
-    # train_and_save_model(data_file=dt.get_output_name(dataset_name, model_name), n_epochs=50, batch_size=50,
-    #                      non_static=True, early_stop=False, valid_frequency=20, word_embedding="-word2vec",
-    #                      learning_rate=0.1, k_top=1, n_filters=(50,), windows=((3, 4, 5),), seed=0,
-    #                      word_dimentions=None, activations=('relu',), n_hidden=100,
-    #                      dropout=0.5, L1_regs=(0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001))
-    #
     # load_and_print_params("./cnn_states/state_2016-06-12-19:53:52")
     # continue_training(path_to_model="./cnn_states/state_2016-06-12-23:59:51",
     #                   data_file=get_output_name(dataset_name, model_name),
     #                   early_stop=False, valid_frequency=100, n_epochs=50)
     # look_at_vec_map(data_file=get_output_name(dataset_name, model_name))
 
-    train_and_test_models_cross_valid()
+    # train_and_test_models_cross_valid()
     print("--- %s seconds ---" % (time.time() - start_time))

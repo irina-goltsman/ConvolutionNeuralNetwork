@@ -18,5 +18,8 @@ data
 В папку data поместить распакованные датасеты
 
 
-Данные для movieReview нужно скачать отсюда:
+Данные MR_Kaggle:
 https://www.kaggle.com/c/word2vec-nlp-tutorial/data
+
+tweets:
+wget http://thinknook.com/wp-content/uploads/2012/09/Sentiment-Analysis-Dataset.zip

@@ -72,8 +72,8 @@ loaders = {"twitter": load_twitter_data,
 
 if __name__ == "__main__":
     max_size = None
-    model_name = "mr_100"
-    dataset_name = "polarity"
+    model_name = "google_300"
+    dataset_name = "twitter"
     preprocess_dataset(models[model_name], data_files[dataset_name], loaders[dataset_name],
                        output=get_output_name(dataset_name, model_name, max_size), max_size=max_size)
 

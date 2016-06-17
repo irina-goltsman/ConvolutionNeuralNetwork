@@ -1,0 +1,45 @@
+dataset name: ./prepocessed_data/polarity_mr_100
+classifier name: MultinomialNB
+best params:
+{'clf__fit_prior': False, 'clf__alpha': 0.70000000000000007}
+best score = 0.792534
+
+dataset name: ./prepocessed_data/polarity_mr_100
+classifier name: SGDClassifier
+best params:
+{'clf__penalty': 'l2', 'clf__loss': 'hinge', 'clf__fit_intercept': True, 'clf__alpha': 7.0000000000000007e-05}
+best score = 0.785312
+
+dataset name: ./prepocessed_data/polarity_mr_100
+classifier name: LogisticRegression
+best params:
+{'clf__C': 1.8999999999999997, 'clf__fit_intercept': False, 'clf__solver': 'newton-cg'}
+best score = 0.769931
+
+dataset name: ./prepocessed_data/polarity_mr_100
+adam
+Train score = 0.993990. Valid score = 0.786667.
+OPTIMIZATION COMPLETE.
+Best valid score: 0.813333
+Best iter num: 200, best epoch: 2
+
+dcnn?? / 1cnn, mr_kaggle
+global_iter 2380, epoch 6, batch 130, mean train cost = 0.187806
+------------valid score: 0.893200------------
+
+SGDClassifier, mr_kaggle
+clf__penalty=l2, clf__loss=hinge, clf__fit_intercept=False, clf__alpha=1e-05, score=0.905200 -  24.5s
+
+LogisticRegression чуть похуже
+
+dataset name: ./prepocessed_data/mr_kaggle_mr_100
+classifier name: MultinomialNB
+best params:
+{'clf__fit_prior': True, 'clf__alpha': 0.70000000000000007}
+best score = 0.890040
+
+dataset name: ./prepocessed_data/20_news_mr_100
+classifier name: MultinomialNB
+best params:
+{'clf__fit_prior': False, 'clf__alpha': 0.10000000000000001}
+best score = 0.732039

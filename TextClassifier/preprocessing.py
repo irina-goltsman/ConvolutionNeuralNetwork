@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 import numpy as np
 from data_tools import preprocess_dataset, get_output_name
 from sklearn.datasets import fetch_20newsgroups
+import argparse
 
 
 def load_polarity_data(data_files, max_size=None):
@@ -69,11 +70,22 @@ loaders = {"twitter": load_twitter_data,
            "polarity": load_polarity_data,
            "20_news": load_20_news_data}
 
-
+# --data_path=./data/tweets/Sentiment\ Analysis\ Dataset.csv --dataset_name=twitter
+# --model_path=~/hdfs/GoogleNews-vectors-negative300.bin --output_path=~/hdfs/preprocessed_data/twitter_google_300
 if __name__ == "__main__":
     max_size = None
     model_name = "google_300"
     dataset_name = "twitter"
-    preprocess_dataset(models[model_name], data_files[dataset_name], loaders[dataset_name],
-                       output=get_output_name(dataset_name, model_name, max_size), max_size=max_size)
+    parser = argparse.ArgumentParser(description='Preprocess given dataset.')
+    parser.add_argument("--max_size", type=int, default=max_size, help='Max number of rows should be processed.')
+    parser.add_argument("--dataset_name", type=str, default=dataset_name, help='Dataset short name.')
+    parser.add_argument("--model_path", type=str, default=models[model_name], help='Path to word embedding model.')
+    parser.add_argument("--data_path", type=str, default=data_files[dataset_name], help='Path to dataset.')
+    parser.add_argument("--output_path", type=str, default=get_output_name(dataset_name, model_name, max_size),
+                        help='Full path to output file.')
+    args = vars(parser.parse_args())
+    print args
 
+    preprocess_dataset(model_path=args['model_path'], data_path=args['data_path'],
+                       load_function=loaders[args['dataset_name']],
+                       output=args['output_path'], max_size=max_size)

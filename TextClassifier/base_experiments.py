@@ -11,6 +11,7 @@ from sklearn.grid_search import GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
+import argparse
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s',
                     level=logging.INFO)
@@ -58,7 +59,7 @@ def train_and_test_model_cross_valid(data_file, clf, clf_params):
     write_results(data_file, clf.__class__.__name__, gs_clf)
 
 
-def train_and_test_models_cross_valid(model_name, dataset_names, classifiers):
+def train_and_test_models_cross_valid(data_files, clf_names):
     SGDClassifier_params = {
         'clf__alpha': np.arange(1e-5, 2e-4, 1e-5),
         'clf__loss': ('hinge', 'log', 'modified_huber', 'squared_hinge', 'perceptron',
@@ -82,33 +83,14 @@ def train_and_test_models_cross_valid(model_name, dataset_names, classifiers):
         # 'clf__multi_class': ('ovr', 'multinomial')
     }
 
-    clf_with_params = {SGDClassifier: SGDClassifier_params,
-                       MultinomialNB: MultinomialNB_params,
-                       LogisticRegression: LogisticRegression_params}
+    classifiers = {'SGDClassifier':      (SGDClassifier, SGDClassifier_params),
+                   'MultinomialNB':      (MultinomialNB, MultinomialNB_params),
+                   'LogisticRegression': (LogisticRegression, LogisticRegression_params)}
 
-    for dataset_name in dataset_names:
-        if dataset_name in avaliable_datasets:
-            print "dataset '%s' is processing..." % dataset_name
-        else:
-            print "Error: dataset '%s' not avaliable" % dataset_name
-            print "List of avaliable datasets: " + str(avaliable_datasets)
-            print "Next task will be started.."
-            continue
-
-        if model_name in available_models:
-            print "model name = %s" % model_name
-        else:
-            print "Error: model '%s' not avaliable" % model_name
-            print "List of avaliable models: " + str(available_models)
-            print "Next task will be started.."
-            continue
-
-        data_file = dt.get_output_name(dataset_name, model_name)
-        for clf in classifiers:
-            try:
-                params = clf_with_params[clf]
-            except KeyError:
-                params=[]
+    for data_file in data_files:
+        print data_file
+        for clf_name in clf_names:
+            clf, params = classifiers[clf_name]
             try:
                 train_and_test_model_cross_valid(data_file, clf(), params)
             except:
@@ -116,11 +98,40 @@ def train_and_test_models_cross_valid(model_name, dataset_names, classifiers):
                 continue
 
 
+def check_input(dataset_names, model_name):
+    for dataset_name in dataset_names:
+        if dataset_name not in avaliable_datasets:
+            print "Error: dataset '%s' not avaliable" % dataset_name
+            print "List of avaliable datasets: " + str(avaliable_datasets)
+            raise NotImplementedError
+
+    if model_name not in available_models:
+        print "Error: model '%s' not avaliable" % model_name
+        print "List of avaliable models: " + str(available_models)
+        raise NotImplementedError
+
 avaliable_datasets = ("twitter", "mr_kaggle", "polarity", "20_news")
 available_models = ("mr_100", "google_300")
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Baseline model grid test.')
+    parser.add_argument("--data_files", nargs='+', type=str, default=None, help="List of preprocessed data files.")
+    parser.add_argument("--clf", nargs='+', type=str, default=('LogisticRegression',),
+                        help="Name of classifier. Possible values are 'LogisticRegression', 'MultinomialNB', "
+                             "'SGDClassifier'")
+    args = vars(parser.parse_args())
+    data_files = args['data_files']
+    if data_files is None:
+        model_name = "google_300"
+        dataset_names = ("20_news",)
+        check_input(dataset_names, model_name)
+        data_files = [dt.get_output_name(dataset_name, model_name) for dataset_name in dataset_names]
+
+    print "classifiers:"
+    print args['clf']
+    print "data_files:"
+    print data_files
+
     start_time = time.time()
-    train_and_test_models_cross_valid(model_name = "google_300", dataset_names =("twitter",),
-                                      classifiers=(LogisticRegression,))
+    train_and_test_models_cross_valid(clf_names=args['clf'], data_files=data_files)
     print("--- %s seconds ---" % (time.time() - start_time))

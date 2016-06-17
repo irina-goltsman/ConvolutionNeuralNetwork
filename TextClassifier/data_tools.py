@@ -34,8 +34,8 @@ def words_count(text):
     return len(text.split())
 
 
-def get_output_name(dataset_name, model_name, max_size=None):
-    output = "./prepocessed_data/" + dataset_name + "_" + model_name
+def get_output_name(dataset_name, model_name, max_size=None, output_folder="./prepocessed_data"):
+    output = output_folder + '/' +dataset_name + "_" + model_name
     if max_size is not None:
         output += "_" + str(max_size)
     return output

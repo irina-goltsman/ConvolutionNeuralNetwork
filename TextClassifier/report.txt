@@ -43,3 +43,4 @@ classifier name: MultinomialNB
 best params:
 {'clf__fit_prior': False, 'clf__alpha': 0.10000000000000001}
 best score = 0.732039
+

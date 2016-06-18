@@ -7,7 +7,7 @@ import re
 from nltk.corpus import stopwords
 import time
 import cPickle
-from gensim.models import Word2Vec
+# from gensim.models import Word2Vec
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.feature_extraction.text import CountVectorizer
 
@@ -34,7 +34,7 @@ def words_count(text):
     return len(text.split())
 
 
-def get_output_name(dataset_name, model_name, max_size=None, output_folder="./prepocessed_data"):
+def get_output_name(dataset_name, model_name, max_size=None, output_folder="./preprocessed_data"):
     output = output_folder + '/' +dataset_name + "_" + model_name
     if max_size is not None:
         output += "_" + str(max_size)
@@ -55,9 +55,10 @@ def make_vocab_list(data, min_df=1):
 def load_bin_vec(fname, vocab):
     """
     Нет смысла сохранять всю модель Word2Vec, сохраню только те слова, которые встречаются в датасете.
-    Возвращает словарь, для каждого слова в нём содержится его векторное представление
+    Возвращает словарь, для каждого слова в нём содержится его векторное представление, а также размерность слов
     """
     word_vecs = {}
+    dim = None
     with open(fname, "rb") as f:
         header = f.readline()
         vocab_size, layer1_size = map(int, header.split())
@@ -73,9 +74,11 @@ def load_bin_vec(fname, vocab):
                     word.append(ch)
             if word in vocab:
                 word_vecs[word] = np.fromstring(f.read(binary_len), dtype='float32')
+                if dim is None:
+                    dim = len(word_vecs[word])
             else:
                 f.read(binary_len)
-    return word_vecs
+    return word_vecs, dim
 
 
 def load_w2v(model_path, vocab):
@@ -145,7 +148,8 @@ def preprocess_dataset(model_path, data_path, load_function, output="prepared_da
     vocabulary = make_vocab_list(data["text"])
     print "vocab size: " + str(len(vocabulary))
     print "Word embedding model is loading from %s." % model_path
-    word_vec, dim = load_w2v(model_path, vocabulary)
+    # word_vec, dim = load_w2v(model_path, vocabulary)
+    word_vec, dim = load_bin_vec(model_path, vocabulary)
     print "Word embedding model has been loaded."
     print "Word dimensions = %d" % dim
     print "num words already in word2vec: " + str(len(word_vec))
@@ -154,11 +158,7 @@ def preprocess_dataset(model_path, data_path, load_function, output="prepared_da
     add_unknown_words(word_vec, vocabulary, dim)
     # W - матрица всех слов из модели word2vec и word_idx_map - словарь, по слову можно узнать id, чтобы вызвать W[id]
     W_matrix, word_idx_map = get_embedding_matrix(word_vec, dim)
-    # Альтернативно можно не использовать word2vec, а просто рандомно инициализировать веса! это матрица W2
-    rand_vecs = {}
-    add_unknown_words(rand_vecs, vocabulary, dim)
-    W2_matrix, _ = get_embedding_matrix(rand_vecs, dim)
-    cPickle.dump([data, W_matrix, W2_matrix, word_idx_map, vocabulary], open(output, "wb"))
+    cPickle.dump([data, W_matrix, word_idx_map, vocabulary], open(output, "wb"))
     print "dataset preprocessed and saved as '%s'" % output
     print("--- %s seconds ---" % (time.time() - start_time))
 

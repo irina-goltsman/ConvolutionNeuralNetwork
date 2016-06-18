@@ -37,6 +37,8 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # TODO: нечего делать? занят процессор? - рефакторинг кода наше всё
 # TODO: убрать стоп слова и протестить на бейзлайнах ещё раз
 
+# На хадупе от яндекса нет gensim и lasagne - хотя с первой проблемо ещё можно справиться... load_bin_vec
+
 class CNNTextClassifier(BaseEstimator):
     def __init__(self, clf_name='1cnn', vocab_size=None, word_dimension=100, word_embedding=None, non_static=True,
                  batch_size=100, sentence_len=None, n_out=2,

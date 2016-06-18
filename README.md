@@ -11,7 +11,7 @@ gensim
 
 Создать поддериктории в TextClassifier:
 cnn_states
-prepocessed_data
+preprocessed_data
 results
 data
 

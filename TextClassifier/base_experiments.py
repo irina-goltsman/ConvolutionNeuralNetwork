@@ -116,7 +116,7 @@ available_models = ("mr_100", "google_300")
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Baseline model grid test.')
     parser.add_argument("--data_files", nargs='+', type=str, default=None, help="List of preprocessed data files.")
-    parser.add_argument("--clf", nargs='+', type=str, default=('LogisticRegression',),
+    parser.add_argument("--clf", nargs='+', type=str, default=('LogisticRegression', 'SGDClassifier'),
                         help="Name of classifier. Possible values are 'LogisticRegression', 'MultinomialNB', "
                              "'SGDClassifier'")
     args = vars(parser.parse_args())

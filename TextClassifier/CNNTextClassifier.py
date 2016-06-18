@@ -29,7 +29,6 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # TODO: ================================сделать character-level сеть - 2ч ( переоценить время после пункта 6 )
 # TODO: 2 проверить, сохраняется ли state? - 5 мин
 # TODO: 3 протестить 1cnn на 20news - чисто эмпирически (макс 3 эпохи) - 30мин - 1.5ч
-# TODO: 5 протестить 20news на baselines - сравнить - 1ч
 # TODO: 7 я правильно понимаю, что 2-х слойная сеть вообще не обучается? - 15мин
 # TODO: 8 запустить baseline на twitter_google_300 - оценить примерное качество - 2ч
 # TODO: 9 обучить сетку 1cnn на twitter_google_300 - 10ч (ГДЕ ВЗЯТЬ СТОЛЬКО ВРЕМЕНИ???)
@@ -171,33 +170,19 @@ class CNNTextClassifier(BaseEstimator):
         updates = lasagne.updates.adadelta(loss_train, all_params, self.learning_rate)
         # updates = lasagne.updates.adam(loss_train, all_params)
 
-        # self.loss_eval = lasagne.objectives.categorical_crossentropy(self.p_y_given_x, self.y)
+        self.loss_eval = lasagne.objectives.categorical_crossentropy(self.p_y_given_x, self.y)
         self.correct_predictions = T.eq(self.y_pred, self.y)
 
-        index = T.lscalar()
-        self.train_model = theano.function([index], outputs=loss_train, updates=updates,
-                                           givens={
-                                               self.x: x_train[index * self.batch_size: (index + 1) * self.batch_size],
-                                               self.y: y_train[index * self.batch_size: (index + 1) * self.batch_size]},
+        index = T.iscalar()
+        self.train_model = theano.function(inputs=[self.x, self.y], outputs=loss_train, updates=updates,
                                            allow_input_downcast=True)
 
-        # self.val_loss = theano.function([index], outputs=self.loss_eval,
-        #                                 givens={
-        #                                     self.x: x_valid[index * self.batch_size: (index + 1) * self.batch_size],
-        #                                     self.y: y_valid[index * self.batch_size: (index + 1) * self.batch_size]},
-        #                                 allow_input_downcast=True)
+        self.calc_score = theano.function(inputs=[self.x, self.y], outputs=self.correct_predictions,
+                                           allow_input_downcast=True)
 
-        self.val_score = theano.function([index], outputs=self.correct_predictions,
-                                         givens={
-                                             self.x: x_valid[index * self.batch_size: (index + 1) * self.batch_size],
-                                             self.y: y_valid[index * self.batch_size: (index + 1) * self.batch_size]},
+        self.calc_loss = theano.function(inputs=[self.x, self.y], outputs=self.loss_eval,
                                          allow_input_downcast=True)
 
-        self.train_score = theano.function([index], outputs=self.correct_predictions,
-                                           givens={
-                                               self.x: x_train[index * self.batch_size: (index + 1) * self.batch_size],
-                                               self.y: y_train[index * self.batch_size: (index + 1) * self.batch_size]},
-                                           allow_input_downcast=True)
         print "Preparing for training finished"
         self.is_ready_to_train = True
 
@@ -247,6 +232,9 @@ class CNNTextClassifier(BaseEstimator):
 
         return X, y
 
+    def get_batch(self, X, id):
+        return X[id * self.batch_size: (id + 1) * self.batch_size]
+
     # TODO: разбери эту огромную функцию на маленькие читабельные части
     def fit(self, x_train, y_train, model_path=None, n_epochs=None, validation_part=0.1,
             valid_frequency=4, early_stop=False):
@@ -295,10 +283,10 @@ class CNNTextClassifier(BaseEstimator):
         if isinstance(x_valid, Series):
             x_valid = x_valid.reset_index(drop=True)
 
-        x_train, y_train = self.shared_dataset(x_train, y_train)
-        x_valid, y_valid = self.shared_dataset(x_valid, y_valid)
-        print 'x_train.shape = ' + str(x_train.shape.eval())
-        print 'x_valid.shape = ' + str(x_valid.shape.eval())
+        # x_train, y_train = self.shared_dataset(x_train, y_train)
+        # x_valid, y_valid = self.shared_dataset(x_valid, y_valid)
+        print 'x_train.shape = ' + str(x_train.shape)
+        print 'x_valid.shape = ' + str(x_valid.shape)
 
         if not self.is_ready_to_train:
             self.ready_to_train(x_train, y_train, x_valid, y_valid)
@@ -325,14 +313,17 @@ class CNNTextClassifier(BaseEstimator):
             indices = self.rng.permutation(num_train_batches)
             for cur_idx, real_idx in enumerate(indices):
                 iter = (epoch - 1) * num_train_batches + cur_idx
-                cur_train_cost = self.train_model(real_idx)
+                cur_train_cost = self.train_model(self.get_batch(x_train, real_idx),
+                                                  self.get_batch(y_train, real_idx))
                 train_cost += cur_train_cost
 
                 if iter > 0 and iter % valid_frequency == 0:
                     print "global_iter %d, epoch %d, batch %d, mean train cost = %f" % \
                           (iter, epoch, cur_idx, train_cost / valid_frequency)
                     train_cost = 0
-                    valid_score = np.mean([self.val_score(i) for i in xrange(num_val_batches)])
+                    valid_score = np.mean([self.calc_score(self.get_batch(x_valid, id),
+                                                           self.get_batch(y_valid, id))
+                                           for id in xrange(num_val_batches)])
                     # выведу результаты валидации:
                     print "------------valid score: %f------------" \
                           % (float(valid_score))
@@ -353,8 +344,13 @@ class CNNTextClassifier(BaseEstimator):
                         stop = True
                         break
             # Конец эпохи:
-            train_score = np.mean([self.train_score(i) for i in xrange(num_train_batches)])
-            valid_score = np.mean([self.val_score(i) for i in xrange(num_val_batches)])
+            train_score = np.mean([self.calc_score(self.get_batch(x_train, id),
+                                                   self.get_batch(y_train, id))
+                                   for id in xrange(num_train_batches)])
+
+            valid_score = np.mean([self.calc_score(self.get_batch(x_valid, id),
+                                                   self.get_batch(y_valid, id))
+                                   for id in xrange(num_val_batches)])
             print "Epoch %d finished. Training time: %.2f secs" % (epoch, time.time()-start_time)
             print "Train score = %f. Valid score = %f." % (float(train_score), float(valid_score))
 

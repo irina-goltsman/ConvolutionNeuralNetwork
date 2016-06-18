@@ -20,6 +20,30 @@ def parse_activation(name):
         raise NotImplementedError
 
 
+def build_new_cnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, word_embedding,
+                  non_static, windows, n_filters, activations, k_top, dropout, n_out):
+    l_in = lasagne.layers.InputLayer(
+        shape=(batch_size, sentence_len),
+        input_var=input_var
+    )
+
+    l_embedding = CNN.embeddings.SentenceEmbeddingLayer(
+        l_in,
+        vocab_size=vocab_size,
+        word_dimension=word_dimension,
+        word_embedding=word_embedding,
+        non_static=non_static
+    )
+
+    l_conv = lasagne.layers.conv.Conv2DLayer(
+        l_embedding,
+        n_filters[0],
+        b=b1,
+        filter_size=(window, word_dimension),
+        nonlinearity=parse_activation(activations[0])
+    )
+
+
 def build_1cnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, word_embedding,
                non_static, windows, n_filters, activations, k_top, dropout, n_out):
     l_in = lasagne.layers.InputLayer(
@@ -59,7 +83,6 @@ def build_1cnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, 
     l_concat1 = lasagne.layers.ConcatLayer(layers, axis=1)
 
     l_dropout2 = lasagne.layers.DropoutLayer(l_concat1, p=dropout)
-    # TODO: добавить возможность создавать много полносвязных слоёв, по параметру hidden_units как у Кима
     # gain='relu' or sqrt(2) for rectified linear units
     # gain=sqrt(2/(1+alpha**2)) for leaky rectified linear units
     # l_dense = lasagne.layers.DenseLayer(

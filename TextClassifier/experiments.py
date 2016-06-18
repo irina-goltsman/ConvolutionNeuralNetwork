@@ -157,15 +157,17 @@ def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, 
     try:
         clf.fit(data["idx_features"], data["label"], early_stop=early_stop, valid_frequency=valid_frequency)
     except:
-        save_model(clf)
+        # save_model(clf)
         raise
     save_model(clf)
 
+# avaliable_datasets = ("twitter", "mr_kaggle", "polarity", "20_news")
+# available_models = ("mr_100", "google_300")
 
 if __name__ == "__main__":
     start_time = time.time()
     model_name = "google_300"
-    dataset_name = "twitter"
+    dataset_name = "20_news"
     # train_and_save_model(clf_name='dcnn', data_file=dt.get_output_name(dataset_name, model_name),
     #                      n_epochs=40, batch_size=20, non_static=True, early_stop=False, valid_frequency=20,
     #                      learning_rate=1.0, k_top=4, n_filters=(6, 14),

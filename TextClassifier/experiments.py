@@ -83,8 +83,10 @@ def train_and_test_cross_valid(data_file, n_epochs, non_static, batch_size, k_to
         word_vect = None
 
     print "word's dimentions = %d" % word_dimentions
-    max_l = max(data["text"].apply(dt.words_count))
+    counts = data["text"].apply(dt.words_count)
+    max_l = max(counts)
     print "max length of text = %d words" % max_l
+    print "min lenght of text = %d words" % min(counts)
     data = dt.add_idx_features(data, word_idx_map, max_l=max_l, filter_h=5)
 
     assert dt.check_all_sentences_have_one_dim(data["idx_features"])
@@ -137,9 +139,13 @@ def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, 
     else:
         word_vect = None
 
+    print data["text"][1]
+
     print "word's dimentions = %d" % word_dimentions
-    max_l = max(data["text"].apply(dt.words_count))
+    counts = data["text"].apply(dt.words_count)
+    max_l = max(counts)
     print "max length of text = %d words" % max_l
+    print "min lenght of text = %d words" % min(counts)
     data = dt.add_idx_features(data, word_idx_map, max_l=max_l, filter_h=5)
 
     assert dt.check_all_sentences_have_one_dim(data["idx_features"])
@@ -161,23 +167,25 @@ def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, 
         raise
     save_model(clf)
 
+
 # avaliable_datasets = ("twitter", "mr_kaggle", "polarity", "20_news")
 # available_models = ("mr_100", "google_300")
 
 if __name__ == "__main__":
     start_time = time.time()
+    max_size=200000
     model_name = "google_300"
-    dataset_name = "20_news"
+    dataset_name = "twitter"
     # train_and_save_model(clf_name='dcnn', data_file=dt.get_output_name(dataset_name, model_name),
     #                      n_epochs=40, batch_size=20, non_static=True, early_stop=False, valid_frequency=20,
     #                      learning_rate=1.0, k_top=4, n_filters=(6, 14),
     #                      windows=((7,), (5,)), seed=0, word_dimentions=40, activations=('tanh', 'tanh'),
     #                      dropout=0.2, L1_regs=(0.00001, 0.00003, 0.000003, 0.0001), n_hidden=100)
     # #
-    train_and_save_model(clf_name='1cnn', data_file=dt.get_output_name(dataset_name, model_name),
+    train_and_save_model(clf_name='1cnn', data_file=dt.get_output_name(dataset_name, model_name, max_size),
                          n_epochs=25, batch_size=50, non_static=True, early_stop=True, valid_frequency=20,
                          learning_rate=0.5, k_top=1, n_filters=(100,),
-                         windows=((3, ),), seed=0, word_dimentions=None, activations=('relu',),
+                         windows=((3, ),), seed=0, word_dimentions=30, activations=('relu',),
                          dropout=0.5, L1_regs=(0.0, 0.00001, 0.00001, 0.00001, 0.0001, 0.0001), n_hidden=100)
 
     # load_and_print_params("./cnn_states/state_2016-06-12-19:53:52")

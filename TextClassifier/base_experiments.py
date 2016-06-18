@@ -17,15 +17,6 @@ logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s',
                     level=logging.INFO)
 
 
-def load_only_data(data_file):
-    print "loading data from %s..." % data_file
-    x = cPickle.load(open(data_file, "rb"))
-    data = x[0]
-    rng = np.random.RandomState(0)
-    data.reindex(rng.permutation(data.index))
-    return data
-
-
 def write_results(dataset_name, clf_name, gs_clf, outfile='./report.txt'):
     result_str = list()
     result_str.append('\n')
@@ -41,7 +32,7 @@ def write_results(dataset_name, clf_name, gs_clf, outfile='./report.txt'):
 
 
 def train_and_test_model_cross_valid(data_file, clf, clf_params):
-    data = load_only_data(data_file)
+    data = dt.load_only_data(data_file)
 
     print 'clf name = %s' % clf.__class__.__name__
     # LogisticRegression; MultinomialNB; LinearSVC; SGDClassifier

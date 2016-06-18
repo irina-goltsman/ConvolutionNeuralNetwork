@@ -7,9 +7,17 @@ import re
 from nltk.corpus import stopwords
 import time
 import cPickle
-# from gensim.models import Word2Vec
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.feature_extraction.text import CountVectorizer
+
+
+def load_only_data(data_file):
+    print "loading data from %s..." % data_file
+    x = cPickle.load(open(data_file, "rb"))
+    data = x[0]
+    rng = np.random.RandomState(0)
+    data.reindex(rng.permutation(data.index))
+    return data
 
 
 def get_bag_of_words(data, min_df=1):
@@ -82,6 +90,7 @@ def load_bin_vec(fname, vocab):
 
 
 def load_w2v(model_path, vocab):
+    from gensim.models import Word2Vec
     try:
         model = Word2Vec.load_word2vec_format(model_path, binary=True)
     except UnicodeDecodeError:
@@ -122,7 +131,7 @@ def get_embedding_matrix(word_vecs, dim):
 
 
 def clean_str(string):
-    string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
+    string = re.sub(r"[^A-Za-z0-9(),:!?\'\`\^]", " ", string)
     string = re.sub(r"\'s", " \'s", string)
     string = re.sub(r"\'ve", " \'ve", string)
     string = re.sub(r"n\'t", " n\'t", string)
@@ -130,6 +139,7 @@ def clean_str(string):
     string = re.sub(r"\'d", " \'d", string)
     string = re.sub(r"\'ll", " \'ll", string)
     string = re.sub(r",", " , ", string)
+    string = re.sub(r":", " : ", string)
     string = re.sub(r"!", " ! ", string)
     string = re.sub(r"\(", " \( ", string)
     string = re.sub(r"\)", " \) ", string)
@@ -148,8 +158,8 @@ def preprocess_dataset(model_path, data_path, load_function, output="prepared_da
     vocabulary = make_vocab_list(data["text"])
     print "vocab size: " + str(len(vocabulary))
     print "Word embedding model is loading from %s." % model_path
-    # word_vec, dim = load_w2v(model_path, vocabulary)
-    word_vec, dim = load_bin_vec(model_path, vocabulary)
+    word_vec, dim = load_w2v(model_path, vocabulary)
+    # word_vec, dim = load_bin_vec(model_path, vocabulary)
     print "Word embedding model has been loaded."
     print "Word dimensions = %d" % dim
     print "num words already in word2vec: " + str(len(word_vec))
@@ -161,7 +171,6 @@ def preprocess_dataset(model_path, data_path, load_function, output="prepared_da
     cPickle.dump([data, W_matrix, word_idx_map, vocabulary], open(output, "wb"))
     print "dataset preprocessed and saved as '%s'" % output
     print("--- %s seconds ---" % (time.time() - start_time))
-
 
 
 def add_idx_features(data, word_idx_map, max_l=51, filter_h=5):

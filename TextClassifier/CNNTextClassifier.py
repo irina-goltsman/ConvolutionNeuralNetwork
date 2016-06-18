@@ -36,6 +36,9 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # TODO: нечего делать? занят процессор? - рефакторинг кода наше всё
 # TODO: убрать стоп слова и протестить на бейзлайнах ещё раз
 
+# TODO: 20_news имеет слишком большой разброс в длине текста, нормально ли просто отрубать часть?
+# TODO: обучаться для начала на половине / четверти датасета twitters
+
 # На хадупе от яндекса нет gensim и lasagne - хотя с первой проблемо ещё можно справиться... load_bin_vec
 
 class CNNTextClassifier(BaseEstimator):
@@ -167,8 +170,8 @@ class CNNTextClassifier(BaseEstimator):
                                                                                lasagne.regularization.l1)
 
         all_params = lasagne.layers.get_all_params(self.network)
-        updates = lasagne.updates.adadelta(loss_train, all_params, self.learning_rate)
-        # updates = lasagne.updates.adam(loss_train, all_params)
+        # updates = lasagne.updates.adadelta(loss_train, all_params, self.learning_rate)
+        updates = lasagne.updates.adam(loss_train, all_params)
 
         self.loss_eval = lasagne.objectives.categorical_crossentropy(self.p_y_given_x, self.y)
         self.correct_predictions = T.eq(self.y_pred, self.y)

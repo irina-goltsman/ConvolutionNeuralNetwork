@@ -93,8 +93,9 @@ def train_and_test_models_cross_valid(data_files, clf_names):
             try:
                 train_and_test_model_cross_valid(data_file, clf(), params)
             except:
-                print "Exception was catched! Next task will be started.."
-                continue
+                # print "Exception was catched! Next task will be started.."
+                # continue
+                raise
 
 
 def check_input(dataset_names, model_name):

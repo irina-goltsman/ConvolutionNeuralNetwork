@@ -75,7 +75,7 @@ loaders = {"twitter": load_twitter_data,
 if __name__ == "__main__":
     max_size = None
     model_name = "google_300"
-    dataset_name = "20_news"
+    dataset_name = "twitter"
     parser = argparse.ArgumentParser(description='Preprocess given dataset.')
     parser.add_argument("--max_size", type=int, default=max_size, help='Max number of rows should be processed.')
     parser.add_argument("--dataset_name", type=str, default=dataset_name, help='Dataset short name.')
@@ -88,4 +88,4 @@ if __name__ == "__main__":
 
     preprocess_dataset(model_path=args['model_path'], data_path=args['data_path'],
                        load_function=loaders[args['dataset_name']],
-                       output=args['output_path'], max_size=max_size)
+                       output=args['output_path'], max_size=args['max_size'])

@@ -88,7 +88,6 @@ def train_and_test_models_cross_valid(data_files, clf_names):
                    'LogisticRegression': (LogisticRegression, LogisticRegression_params)}
 
     for data_file in data_files:
-        print data_file
         for clf_name in clf_names:
             clf, params = classifiers[clf_name]
             try:

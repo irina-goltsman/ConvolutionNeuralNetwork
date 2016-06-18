@@ -264,8 +264,10 @@ class CNNTextClassifier(BaseEstimator):
 
         if isinstance(x_train, Series):
             x_train = x_train.values.tolist()
+            x_train = np.asarray(x_train)
         if isinstance(y_train, Series):
             y_train = y_train.values.tolist()
+            y_train = np.asarray(y_train)
 
         x_train, y_train = self.extend_to_batch_size(x_train, y_train, self.batch_size, self.rng)
 
@@ -278,15 +280,10 @@ class CNNTextClassifier(BaseEstimator):
                                                               random_state=self.rng)
         assert len(x_valid) % self.batch_size == 0
 
-        if isinstance(y_valid, Series):
-            y_valid = y_valid.reset_index(drop=True)
-        if isinstance(x_valid, Series):
-            x_valid = x_valid.reset_index(drop=True)
-
-        # x_train, y_train = self.shared_dataset(x_train, y_train)
-        # x_valid, y_valid = self.shared_dataset(x_valid, y_valid)
         print 'x_train.shape = ' + str(x_train.shape)
         print 'x_valid.shape = ' + str(x_valid.shape)
+        # x_train, y_train = self.shared_dataset(x_train, y_train)
+        # x_valid, y_valid = self.shared_dataset(x_valid, y_valid)
 
         if not self.is_ready_to_train:
             self.ready_to_train(x_train, y_train, x_valid, y_valid)

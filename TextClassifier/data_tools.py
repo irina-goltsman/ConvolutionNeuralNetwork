@@ -11,13 +11,50 @@ from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.feature_extraction.text import CountVectorizer
 
 
-def load_only_data(data_file):
-    print "loading data from %s..." % data_file
-    x = cPickle.load(open(data_file, "rb"))
-    data = x[0]
-    rng = np.random.RandomState(0)
-    data.reindex(rng.permutation(data.index))
-    return data
+def read_and_sort_matlab_data(x_file, y_file, padding_value=15448):
+    sorted_dict = {}
+    x_data = []
+    i=0
+    file = open(x_file,"r")
+    for line in file:
+        words = line.split(",")
+        result = []
+        length=None
+        for word in words:
+            word_i = int(word)
+            if word_i == padding_value and length==None:
+                length = len(result)
+            result.append(word_i)
+        x_data.append(result)
+
+        if length==None:
+            length=len(result)
+
+        if length in sorted_dict:
+            sorted_dict[length].append(i)
+        else:
+            sorted_dict[length]=[i]
+        i+=1
+
+    file.close()
+
+    file = open(y_file,"r")
+    y_data = []
+    for line in file:
+        words = line.split(",")
+        y_data.append(int(words[0])-1)
+    file.close()
+
+    new_train_list = []
+    new_label_list = []
+    lengths = []
+    for length, indexes in sorted_dict.items():
+        for index in indexes:
+            new_train_list.append(x_data[index])
+            new_label_list.append(y_data[index])
+            lengths.append(length)
+
+    return np.asarray(new_train_list, dtype=np.int32), np.asarray(new_label_list, dtype=np.int32), lengths
 
 
 def get_bag_of_words(data, min_df=1):
@@ -42,8 +79,10 @@ def words_count(text):
     return len(text.split())
 
 
-def get_output_name(dataset_name, model_name, max_size=None, output_folder="./preprocessed_data"):
-    output = output_folder + '/' +dataset_name + "_" + model_name
+def get_output_name(dataset_name, model_name=None, max_size=None, output_folder="./preprocessed_data"):
+    output = output_folder + '/' + dataset_name
+    if model_name is not None:
+        output += "_" + model_name
     if max_size is not None:
         output += "_" + str(max_size)
     return output
@@ -148,13 +187,19 @@ def clean_str(string):
     return string.strip()
 
 
-def preprocess_dataset(model_path, data_path, load_function, output="prepared_data", max_size=None):
+def preprocess_dataset(data_path, load_function, output="prepared_data", model_path=None, max_size=None):
     start_time = time.time()
     print "loading data...\n",
     data = load_function(data_path, max_size)
     print "data loaded!"
     print "number of sentences: " + str(len(data))
     data["text"] = data["text"].apply(clean_str)
+    if model_path is None:
+        cPickle.dump([data], open(output, "wb"))
+        print "dataset without embedding model preprocessed and saved as '%s'" % output
+        print("--- %s seconds ---" % (time.time() - start_time))
+        return
+
     vocabulary = make_vocab_list(data["text"])
     print "vocab size: " + str(len(vocabulary))
     print "Word embedding model is loading from %s." % model_path
@@ -169,7 +214,7 @@ def preprocess_dataset(model_path, data_path, load_function, output="prepared_da
     # W - матрица всех слов из модели word2vec и word_idx_map - словарь, по слову можно узнать id, чтобы вызвать W[id]
     W_matrix, word_idx_map = get_embedding_matrix(word_vec, dim)
     cPickle.dump([data, W_matrix, word_idx_map, vocabulary], open(output, "wb"))
-    print "dataset preprocessed and saved as '%s'" % output
+    print "dataset with embedding model preprocessed and saved as '%s'" % output
     print("--- %s seconds ---" % (time.time() - start_time))
 
 

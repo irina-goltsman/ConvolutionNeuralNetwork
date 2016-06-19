@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import numpy as np
+import pandas as pd
 import cPickle
 import logging
 import time
@@ -31,8 +32,12 @@ def write_results(dataset_name, clf_name, gs_clf, outfile='./report.txt'):
         out_f.write(result_str)
 
 
-def train_and_test_model_cross_valid(data_file, clf, clf_params):
-    data = dt.load_only_data(data_file)
+def train_and_test_model_cross_valid(data_file, clf, clf_params, n_jobs, n_folds):
+    print "loading data from %s..." % data_file
+    data = cPickle.load(open(data_file, "rb"))[0]
+    assert isinstance(data, pd.DataFrame)
+    rng = np.random.RandomState(0)
+    data.reindex(rng.permutation(data.index))
 
     print 'clf name = %s' % clf.__class__.__name__
     # LogisticRegression; MultinomialNB; LinearSVC; SGDClassifier
@@ -45,18 +50,18 @@ def train_and_test_model_cross_valid(data_file, clf, clf_params):
     # 'vect__min_df': np.arange(1, 10),
     # 'tfidf__sublinear_tf': (True, False),
 
-    gs_clf = GridSearchCV(text_clf, clf_params, n_jobs=2, cv=10, refit=False, verbose=3)
+    gs_clf = GridSearchCV(text_clf, clf_params, n_jobs=n_jobs, cv=n_folds, refit=False, verbose=3)
     gs_clf.fit(data["text"], data["label"])
     write_results(data_file, clf.__class__.__name__, gs_clf)
 
 
-def train_and_test_models_cross_valid(data_files, clf_names):
+def train_and_test_models_cross_valid(data_files, clf_names, n_jobs=2, n_folds=10):
     SGDClassifier_params = {
         'clf__alpha': np.arange(1e-5, 2e-4, 1e-5),
         'clf__loss': ('hinge', 'log', 'modified_huber', 'squared_hinge', 'perceptron',
                       'squared_loss', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive'),
         'clf__penalty': ('none', 'l2', 'l1', 'elasticnet'),
-        'clf__fit_intercept': (False, True)
+        'clf__fit_intercept': (True, False)
         # 'clf__learning_rate': ('constant', 'optimal', 'invscaling')
     }
 
@@ -82,41 +87,26 @@ def train_and_test_models_cross_valid(data_files, clf_names):
         for clf_name in clf_names:
             clf, params = classifiers[clf_name]
             try:
-                train_and_test_model_cross_valid(data_file, clf(), params)
+                train_and_test_model_cross_valid(data_file, clf(), params, n_jobs, n_folds)
             except:
                 # print "Exception was catched! Next task will be started.."
                 # continue
                 raise
 
 
-def check_input(dataset_names, model_name):
-    for dataset_name in dataset_names:
-        if dataset_name not in avaliable_datasets:
-            print "Error: dataset '%s' not avaliable" % dataset_name
-            print "List of avaliable datasets: " + str(avaliable_datasets)
-            raise NotImplementedError
-
-    if model_name not in available_models:
-        print "Error: model '%s' not avaliable" % model_name
-        print "List of avaliable models: " + str(available_models)
-        raise NotImplementedError
-
-avaliable_datasets = ("twitter", "mr_kaggle", "polarity", "20_news")
-available_models = ("mr_100", "google_300")
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Baseline model grid test.')
+    parser = argparse.ArgumentParser(description='Baseline models grid test.')
     parser.add_argument("--data_files", nargs='+', type=str, default=None, help="List of preprocessed data files.")
-    parser.add_argument("--clf", nargs='+', type=str, default=('LogisticRegression', 'SGDClassifier'),
+    parser.add_argument("--clf", nargs='+', type=str, default=('LogisticRegression', 'SGDClassifier', 'MultinomialNB'),
                         help="Name of classifier. Possible values are 'LogisticRegression', 'MultinomialNB', "
                              "'SGDClassifier'")
+    parser.add_argument("--n_jobs", type=int, default=2, help="Number of threads to be run. Default 2.")
+    parser.add_argument("--n_folds", type=int, default=10, help="Number of folds for cross-validation. Default 2.")
     args = vars(parser.parse_args())
     data_files = args['data_files']
     if data_files is None:
-        model_name = "google_300"
-        dataset_names = ("20_news",)
-        check_input(dataset_names, model_name)
-        data_files = [dt.get_output_name(dataset_name, model_name) for dataset_name in dataset_names]
+        dataset_names = ("20_news", "twitter", "polarity", "mr_kaggle")
+        data_files = [dt.get_output_name(dataset_name) for dataset_name in dataset_names]
 
     print "classifiers:"
     print args['clf']
@@ -124,5 +114,6 @@ if __name__ == "__main__":
     print data_files
 
     start_time = time.time()
-    train_and_test_models_cross_valid(clf_names=args['clf'], data_files=data_files)
+    train_and_test_models_cross_valid(clf_names=args['clf'], data_files=data_files,
+                                      n_jobs=args['n_jobs'], n_folds=args['n_folds'])
     print("--- %s seconds ---" % (time.time() - start_time))

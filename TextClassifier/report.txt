@@ -44,3 +44,10 @@ best params:
 {'clf__fit_prior': False, 'clf__alpha': 0.10000000000000001}
 best score = 0.732039
 
+20_news_mr_100
+clf__penalty=elasticnet, clf__loss=hinge, clf__fit_intercept=True, clf__alpha=2e-05, score=0.7692
+clf__loss=squared_epsilon_insensitive, clf__loss=squared_loss - совсем не обучается: score=0.055673
+
+tweets 200000 1cnn
+Epoch 1 finished. Training time: 978.14 secs
+Train score = 0.808994. Valid score = 0.756800.

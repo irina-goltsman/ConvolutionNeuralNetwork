@@ -46,8 +46,23 @@ best score = 0.732039
 
 20_news_mr_100
 clf__penalty=elasticnet, clf__loss=hinge, clf__fit_intercept=True, clf__alpha=2e-05, score=0.7692
-clf__loss=squared_epsilon_insensitive, clf__loss=squared_loss - совсем не обучается: score=0.055673
 
 tweets 200000 1cnn
 Epoch 1 finished. Training time: 978.14 secs
 Train score = 0.808994. Valid score = 0.756800.
+
+dataset name: ../../hdfs/preprocessed_data/20_news
+classifier name: SGDClassifier
+best params:
+{'clf__penalty': 'l2', 'clf__loss': 'squared_loss', 'clf__fit_intercept': True, 'clf__alpha': 4.0000000000000003e-05}
+best score = 0.772259
+
+
+dataset name: ../../hdfs/preprocessed_data/twitter
+classifier name: MultinomialNB
+        'clf__alpha': np.arange(0.1, 2.0, 0.3),
+        'clf__fit_prior': (True, False)
+best params:
+{'clf__fit_prior': True, 'clf__alpha': 1.0000000000000002}
+best score = 0.788536
+

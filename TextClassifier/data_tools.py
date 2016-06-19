@@ -195,14 +195,15 @@ def preprocess_dataset(data_path, load_function, output="prepared_data", model_p
     print "data loaded!"
     print "number of sentences: " + str(len(data))
     data["text"] = data["text"].apply(clean_str)
+    vocabulary = make_vocab_list(data["text"])
+    print "vocab size: " + str(len(vocabulary))
     if model_path is None:
-        cPickle.dump([data], open(output, "wb"))
+        cPickle.dump([data, len(vocabulary)], open(output, "wb"))
         print "dataset without embedding model preprocessed and saved as '%s'" % output
         print("--- %s seconds ---" % (time.time() - start_time))
         return
 
-    vocabulary = make_vocab_list(data["text"])
-    print "vocab size: " + str(len(vocabulary))
+
     print "Word embedding model is loading from %s." % model_path
     word_vec, dim = load_w2v(model_path, vocabulary)
     # word_vec, dim = load_bin_vec(model_path, vocabulary)

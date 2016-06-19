@@ -62,25 +62,32 @@ def load_dbpedia_data(data_path, max_size=None):
 
 
 def load_binary_sentiment(data_path, max_size=None):
+    # 6920 - тренировочная выборка, 872 - валидац., 1821 - тестовая
+    # тренировочная выборка, однако, в 23 раза больше - Kalchbrener разбил выборку на
     train_x_indexes, train_y, train_lengths = dt.read_and_sort_matlab_data(data_path+"train.txt",
                                                                            data_path+"train_lbl.txt")
     dev_x_indexes, dev_y, dev_lengths = dt.read_and_sort_matlab_data(data_path + "valid.txt",
                                                                      data_path + "valid_lbl.txt")
     test_x_indexes, test_y, test_lengths = dt.read_and_sort_matlab_data(data_path + "test.txt",
                                                                         data_path + "test_lbl.txt")
+    print train_x_indexes.shape
+    print dev_x_indexes.shape
+    print test_x_indexes.shape
     # for i in xrange(1, 57):
     #     print train_lengths.count(i)
-    for i in xrange(15441):
-        print "sentence: '%s', label: %d" % (str(train_x_indexes[i][0]), train_y[i])
+    # for i in xrange(15441):
+    #     print "sentence: '%s', label: %d" % (str(train_x_indexes[i][0]), train_y[i])
 
 
 def examine_dataset(data_path, load_function):
     data = load_function(data_path)
     print "data loaded"
     print "number of sentences: " + str(len(data))
+    print "example of data: " + data["text"][1]
     print "cleaning..."
-    data["text"] = data["text"].apply(dt.clean_str)
+    data["cleared_text"] = data["text"].apply(dt.clean_str)
     print "cleaning finished"
+    print "example of cleared data: " + data["cleared_text"][1]
     print "vocab list creation..."
     vocabulary = dt.make_vocab_list(data["text"])
     print "vocab size: " + str(len(vocabulary))
@@ -118,22 +125,27 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Preprocess given dataset.')
     parser.add_argument("--max_size", type=int, default=max_size, help='Max number of rows should be processed.')
     parser.add_argument("--dataset_name", type=str, default="mr_kaggle", help='Dataset short name.')
-    # TODO: проверь синтаксис
     parser.add_argument("--model_path", type=str, default=models[model_name] if model_name is not None else None,
                         help='Path to word embedding model.')
     parser.add_argument("--data_path", type=str, default=None, help='Path to dataset.')
     parser.add_argument("--output_path", type=str, default=None, help='Full path to output file.')
+    parser.add_argument("--examine", type=bool, default=False, help='Full path to output file.')
     args = vars(parser.parse_args())
 
     if args['data_path'] is None:
         args['data_path'] = data_files[args['dataset_name']]
-    if args['output_path'] is None:
-        args['output_path'] = dt.get_output_name(args['dataset_name'], model_name, max_size)
-    print args
 
-    dt.preprocess_dataset(model_path=args['model_path'], data_path=args['data_path'],
-                          load_function=loaders[args['dataset_name']],
-                          output=args['output_path'], max_size=args['max_size'])
+    load_binary_sentiment(args['data_path'])
 
-    # examine_dataset(args['data_path'], load_function=loaders[args['dataset_name']])
-    # load_binary_sentiment(args['data_path'])
+    if args['examine']:
+        print args
+        examine_dataset(args['data_path'], load_function=loaders[args['dataset_name']])
+
+    else:
+        if args['output_path'] is None:
+            args['output_path'] = dt.get_output_name(args['dataset_name'], model_name, max_size)
+        print args
+        dt.preprocess_dataset(model_path=args['model_path'], data_path=args['data_path'],
+                              load_function=loaders[args['dataset_name']],
+                              output=args['output_path'], max_size=args['max_size'])
+

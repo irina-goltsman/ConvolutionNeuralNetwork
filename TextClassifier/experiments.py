@@ -7,6 +7,7 @@ import time
 import datetime
 from sklearn.cross_validation import KFold
 from sklearn.cross_validation import cross_val_score
+from lasagne.updates import adadelta, adam, adagrad
 from CNNTextClassifier import CNNTextClassifier
 import data_tools as dt
 
@@ -69,8 +70,8 @@ def look_at_vec_map(data_file):
 
 
 def train_and_test_cross_valid(data_file, n_epochs, non_static, batch_size, k_top, n_filters, windows, activations,
-                               early_stop, valid_frequency, learning_rate, seed, word_dimentions,
-                               dropout, L1_regs, n_hidden):
+                               early_stop, valid_frequency, seed, word_dimentions,
+                               dropout, L1_regs, n_hidden, update_finction):
     print "loading data...",
     x = cPickle.load(open(data_file, "rb"))
     data, w2v_matrix, word_idx_map, vocab = x[0], x[1], x[2], x[3]
@@ -96,14 +97,15 @@ def train_and_test_cross_valid(data_file, n_epochs, non_static, batch_size, k_to
     clf = CNNTextClassifier(vocab_size=len(w2v_matrix), word_embedding=word_vect,
                             word_dimension=word_dimentions, sentence_len=sentence_len, n_hidden=n_hidden,
                             windows=windows, n_filters=n_filters, k_top=k_top, activations=activations,
-                            batch_size=batch_size, non_static=non_static, dropout=dropout, L1_regs=L1_regs,
-                            learning_rate=learning_rate, n_epochs=n_epochs, seed=seed, n_out=n_out)
+                            batch_size=batch_size, non_static=non_static, dropout=dropout, l1_regs=L1_regs,
+                            seed=seed, n_out=n_out)
 
     print clf.get_params_as_string()
 
     kf = KFold(len(data), n_folds=10, shuffle=True, random_state=100)
     results = cross_val_score(clf, data["idx_features"], data["label"], cv=kf, n_jobs=1,
-                              fit_params={'early_stop': early_stop, 'valid_frequency': valid_frequency})
+                              fit_params={'early_stop': early_stop, 'valid_frequency': valid_frequency,
+                                          'n_epochs': n_epochs, 'update_function': update_finction})
     mean_score = str(np.mean(results))
 
     print "mean score:"
@@ -125,9 +127,9 @@ def save_model(clf):
     # print clf.get_all_weights_values()
 
 
-def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, k_top, n_filters, windows,
-                         activations, early_stop, valid_frequency, learning_rate, seed,
-                         word_dimentions, dropout, L1_regs, n_hidden):
+def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, k_top, n_filters,
+                         windows, activations, early_stop, valid_frequency, seed,
+                         word_dimentions, dropout, L1_regs, n_hidden, update_finction):
     print "loading data...",
     x = cPickle.load(open(data_file, "rb"))
     data, w2v_matrix, word_idx_map, vocab = x[0], x[1], x[2], x[3]
@@ -156,42 +158,91 @@ def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, 
                             word_dimension=word_dimentions, sentence_len=sentence_len, n_hidden=n_hidden,
                             windows=windows, n_filters=n_filters, k_top=k_top, activations=activations,
                             batch_size=batch_size, non_static=non_static, dropout=dropout, L1_regs=L1_regs,
-                            learning_rate=learning_rate, n_epochs=n_epochs, seed=seed, n_out=n_out)
+                            seed=seed, n_out=n_out)
 
     print clf.get_params_as_string()
 
     try:
-        clf.fit(data["idx_features"], data["label"], early_stop=early_stop, valid_frequency=valid_frequency)
+        clf.fit(data["idx_features"], data["label"], early_stop=early_stop, valid_frequency=valid_frequency,
+                n_epochs=n_epochs, update_function=update_finction)
     except:
         # save_model(clf)
         raise
     save_model(clf)
 
 
+def test_on_binary_sentiment(data_path, clf_name, n_epochs, batch_size, non_static, early_stop,
+                             k_top, n_filters, windows, seed, word_dimentions, activations, dropout,
+                             valid_frequency, update_finction, l1_regs=tuple(), l2_regs=tuple()):
+    # 6920 - тренировочная выборка, 872 - валидац., 1821 - тестовая, vocabulary size = 15448
+    # тренировочная выборка, однако, в 23 раза больше - Kalchbrener разбил выборку на
+    train_x_indexes, train_y, train_lengths = dt.read_and_sort_matlab_data(data_path+"train.txt",
+                                                                           data_path+"train_lbl.txt")
+    dev_x_indexes, dev_y, dev_lengths = dt.read_and_sort_matlab_data(data_path + "valid.txt",
+                                                                     data_path + "valid_lbl.txt")
+    test_x_indexes, test_y, test_lengths = dt.read_and_sort_matlab_data(data_path + "test.txt",
+                                                                        data_path + "test_lbl.txt")
+
+    assert dt.check_all_sentences_have_one_dim(train_x_indexes)
+    sentence_len = len(train_x_indexes[1])
+    n_out = max(train_y)+1
+    clf = CNNTextClassifier(clf_name=clf_name, vocab_size=15449, word_embedding=None,
+                            word_dimension=word_dimentions, sentence_len=sentence_len,
+                            windows=windows, n_filters=n_filters, k_top=k_top, activations=activations,
+                            batch_size=batch_size, non_static=non_static, dropout=dropout,
+                            l1_regs=l1_regs, l2_regs=l2_regs,seed=seed, n_out=n_out)
+
+    print clf.get_params_as_string()
+    try:
+        clf.fit(train_x_indexes, train_y, dev_x_indexes, dev_y, test_x_indexes, test_y,
+                early_stop=early_stop, valid_frequency=valid_frequency,
+                n_epochs=n_epochs, update_function=update_finction)
+    except:
+        # save_model(clf)
+        raise
+    save_model(clf)
+
 # avaliable_datasets = ("twitter", "mr_kaggle", "polarity", "20_news")
 # available_models = ("mr_100", "google_300")
 
 if __name__ == "__main__":
     start_time = time.time()
-    max_size=200000
-    model_name = "google_300"
-    dataset_name = "twitter"
+
+    # test_on_binary_sentiment(data_path='./data/binarySentiment/', clf_name='dcnn',
+    #                          n_epochs=50, batch_size=40, non_static=True, early_stop=False,
+    #                          k_top=4, n_filters=(6, 14), windows=((7,), (5,)), seed=0, word_dimentions=48,
+    #                          activations=('tanh', 'tanh'), dropout=0.5, valid_frequency=10,
+    #                          l2_regs=(0.0001 / 2, 0.00003 / 2, 0.000003 / 2, 0.0001 / 2),
+    #                          update_finction=adadelta)
+
+    test_on_binary_sentiment(data_path='./data/binarySentiment/', clf_name='1cnn',
+                             n_epochs=100, batch_size=50, non_static=True, early_stop=True, valid_frequency=20,
+                             k_top=1, n_filters=(200,), windows=((3, 4),), seed=0,
+                             word_dimentions=30, activations=('relu',), dropout=0.2,
+                             l1_regs=(0.00001, 0.00003, 0.000003, 0.0001),
+                             update_finction=adam)
+
+    print("--- %s seconds ---" % (time.time() - start_time))
+
+    max_size = None
+    model_name = "mr_100"
+    dataset_name = "polarity"
     # train_and_save_model(clf_name='dcnn', data_file=dt.get_output_name(dataset_name, model_name),
-    #                      n_epochs=40, batch_size=20, non_static=True, early_stop=False, valid_frequency=20,
-    #                      learning_rate=1.0, k_top=4, n_filters=(6, 14),
-    #                      windows=((7,), (5,)), seed=0, word_dimentions=40, activations=('tanh', 'tanh'),
-    #                      dropout=0.2, L1_regs=(0.00001, 0.00003, 0.000003, 0.0001), n_hidden=100)
+    #                      n_epochs=40, batch_size=50, non_static=True, early_stop=False,
+    #                      k_top=4, n_filters=(20, 20), windows=((7,), (5,)), seed=0, word_dimentions=40,
+    #                      activations=('iden', 'relu'), dropout=0.5, valid_frequency=20,
+    #                      L1_regs=(0.00001, 0.00003, 0.000003, 0.0001), n_hidden=100)
     # #
-    train_and_save_model(clf_name='1cnn', data_file=dt.get_output_name(dataset_name, model_name, max_size),
-                         n_epochs=25, batch_size=50, non_static=True, early_stop=True, valid_frequency=20,
-                         learning_rate=0.5, k_top=1, n_filters=(100,),
-                         windows=((3, ),), seed=0, word_dimentions=30, activations=('relu',),
-                         dropout=0.5, L1_regs=(0.0, 0.00001, 0.00001, 0.00001, 0.0001, 0.0001), n_hidden=100)
+    # train_and_save_model(clf_name='1cnn', data_file=dt.get_output_name(dataset_name, model_name, max_size),
+    #                      n_epochs=3, batch_size=50, non_static=True, early_stop=True, valid_frequency=20,
+    #                      k_top=1, n_filters=(200,), windows=((3, 4),), seed=0, update_finction=adam,
+    #                      word_dimentions=None, activations=('relu',), dropout=0.0,
+    #                      L1_regs=(0.0, 0.00001, 0.00001, 0.00001, 0.0001, 0.0001), n_hidden=100)
 
     # load_and_print_params("./cnn_states/state_2016-06-12-19:53:52")
-    # continue_training(path_to_model="./cnn_states/state_2016-06-12-23:59:51",
-    #                   data_file=get_output_name(dataset_name, model_name),
-    #                   early_stop=False, valid_frequency=100, n_epochs=50)
+    # continue_training(path_to_model="./cnn_states/state_2016-06-18-20:03:13",
+    #                   data_file=dt.get_output_name(dataset_name, model_name),
+    #                   early_stop=False, valid_frequency=5, n_epochs=50)
     # look_at_vec_map(data_file=get_output_name(dataset_name, model_name))
 
     print("--- %s seconds ---" % (time.time() - start_time))

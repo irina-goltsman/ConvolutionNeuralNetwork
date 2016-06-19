@@ -27,7 +27,7 @@ unzip Sentiment-Analysis-Dataset.zip
 
 DBpedia:
 chosen categories:
-Species, Person, AnatomicalStructure, Event, MeanOfTransportation, Place, Medicine, Device, Work, Activity
+Species, Person, AnatomicalStructure, Event, MeanOfTransportation, Place, Diseases, Device, Work, Activity
 
 google 300 word2vec скачать в models и распаковать:
 wget https://s3.amazonaws.com/mordecai-geo/GoogleNews-vectors-negative300.bin.gz

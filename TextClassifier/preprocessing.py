@@ -115,17 +115,20 @@ loaders = {"twitter": load_twitter_data,
 if __name__ == "__main__":
     max_size = None
     model_name = None
-    dataset_name = "twitter"
     parser = argparse.ArgumentParser(description='Preprocess given dataset.')
     parser.add_argument("--max_size", type=int, default=max_size, help='Max number of rows should be processed.')
-    parser.add_argument("--dataset_name", type=str, default=dataset_name, help='Dataset short name.')
+    parser.add_argument("--dataset_name", type=str, default="mr_kaggle", help='Dataset short name.')
     # TODO: проверь синтаксис
     parser.add_argument("--model_path", type=str, default=models[model_name] if model_name is not None else None,
                         help='Path to word embedding model.')
-    parser.add_argument("--data_path", type=str, default=data_files[dataset_name], help='Path to dataset.')
-    parser.add_argument("--output_path", type=str, default=dt.get_output_name(dataset_name, model_name, max_size),
-                        help='Full path to output file.')
+    parser.add_argument("--data_path", type=str, default=None, help='Path to dataset.')
+    parser.add_argument("--output_path", type=str, default=None, help='Full path to output file.')
     args = vars(parser.parse_args())
+
+    if args['data_path'] is None:
+        args['data_path'] = data_files[args['dataset_name']]
+    if args['output_path'] is None:
+        args['output_path'] = dt.get_output_name(args['dataset_name'], model_name, max_size)
     print args
 
     dt.preprocess_dataset(model_path=args['model_path'], data_path=args['data_path'],

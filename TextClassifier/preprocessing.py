@@ -41,7 +41,7 @@ def load_reviews_data(data_path, max_size=None):
 
 
 def load_twitter_data(data_path, max_size=None):
-    data = pd.read_csv(data_path, sep=',', nrows=max_size, index_col=0, usecols=[0, 1, 3])
+    data = pd.read_csv(data_path, sep=',', nrows=max_size, index_col=0, usecols=[0, 1, 3], error_bad_lines=False)
     data.columns = ["label", "text"]
     return data
 

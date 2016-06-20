@@ -47,12 +47,8 @@ best params:
 {'clf__fit_prior': False, 'clf__alpha': 0.10000000000000001}
 best score = 0.732039
 
-20_news_mr_100
+20_news
 clf__penalty=elasticnet, clf__loss=hinge, clf__fit_intercept=True, clf__alpha=2e-05, score=0.7692
-
-tweets 200000 1cnn
-Epoch 1 finished. Training time: 978.14 secs
-Train score = 0.808994. Valid score = 0.756800.
 
 dataset name: ../../hdfs/preprocessed_data/20_news
 classifier name: SGDClassifier
@@ -84,6 +80,9 @@ best params:
 best score = 0.813469
 --- 1923.76216292 seconds ---
 
+tweets 200000 1cnn
+Epoch 1 finished. Training time: 978.14 secs
+Train score = 0.808994. Valid score = 0.756800.
 
 ==========bin_sent=============
 clf_name = dcnn
@@ -114,4 +113,30 @@ global_iter 49650, epoch 13, batch 606, mean train cost = 0.528234
 Test score = 0.800659.
 
 Достигла нормальных результатов только к 4ой эпохе
+
+1cnn - 2
+test_on_binary_sentiment(data_path='./data/binarySentiment/', clf_name='1cnn',
+                         n_epochs=100, batch_size=50, non_static=True, early_stop=False, valid_frequency=20,
+                         k_top=1, n_filters=(200,), windows=((3, 4),), seed=0,
+                         word_dimentions=30, activations=('tanh',), dropout=0.2,
+                         l1_regs=(0.00001, 0.00003, 0.000003, 0.0001),
+                         update_finction=adadelta)
+1cnn - 3
+test_on_binary_sentiment(data_path='./data/binarySentiment/', clf_name='1cnn',
+                         n_epochs=15, batch_size=50, non_static=True, early_stop=False, valid_frequency=20,
+                         k_top=1, n_filters=(100,), windows=((3, 4),), seed=0,
+                         word_dimentions=40, activations=('iden',), dropout=0.2,
+                         l1_regs=(0.0001, 0.0003, 0.00003, 0.0001),
+                         update_finction=adam)
+1cnn - 3:
+Epoch 15 finished. Training time: 482.64 secs
+Train score = 0.814012. Valid score = 0.815367.
+Test score = 0.809995
+OPTIMIZATION COMPLETE.
+Best valid score: 0.823394
+Best iter num: 45620, best epoch: 14
+Last test score = 0.811093
+Saving state to './cnn_states/state_2016-06-20-12:35:33'...
+--- 6383.1793108 seconds ---
+
 ==================================

@@ -73,7 +73,8 @@ def build_1cnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, 
             n_filters[0],
             b=b1,
             filter_size=(window, word_dimension),
-            nonlinearity=parse_activation(activations[0])
+            nonlinearity=parse_activation(activations[0]),
+            # pad="full"
         )
         # Для фильтров разной ширины тут оставляем ровно k максимальных значений
         l_pool = CNN.pooling.KMaxPoolLayer(l_conv, k=k_top)
@@ -102,6 +103,7 @@ def build_1cnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, 
 
 def build_dcnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, word_embedding,
                non_static, windows, n_filters, activations, k_top, dropout, n_out):
+    # sentence_len может быть None
     l_in = lasagne.layers.InputLayer(
         shape=(batch_size, sentence_len),
         input_var=input_var
@@ -125,14 +127,17 @@ def build_dcnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, 
         nonlinearity=lasagne.nonlinearities.linear
     )
     l_fold1 = CNN.folding.FoldingLayer(l_conv1)
-    l_pool1= CNN.pooling.KMaxPoolLayer(l_fold1, k=sentence_len / 2)
+    # TODO: Заменить на dynamic k-max-pooling
+    k = sentence_len / 2 if sentence_len is not None else 10
+    l_pool1= CNN.pooling.KMaxPoolLayer(l_fold1, k=k)
     l_nonlinear1 = lasagne.layers.NonlinearityLayer(l_pool1, nonlinearity=parse_activation(activations[0]))
 
     l_conv2 = CNN.Conv1DLayerSplitted(
         l_nonlinear1,
         n_filters[1],
         filter_hight=windows[1][0],
-        nonlinearity=lasagne.nonlinearities.linear
+        nonlinearity=lasagne.nonlinearities.linear,
+        # border_mode = "full"
     )
     l_fold2 = CNN.folding.FoldingLayer(l_conv2)
     l_pool2 = CNN.pooling.KMaxPoolLayer(l_fold2, k=k_top)

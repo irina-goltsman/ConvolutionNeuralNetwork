@@ -71,7 +71,7 @@ def look_at_vec_map(data_file):
 
 def train_and_test_cross_valid(data_file, n_epochs, non_static, batch_size, k_top, n_filters, windows, activations,
                                early_stop, valid_frequency, seed, word_dimentions,
-                               dropout, L1_regs, n_hidden, update_finction):
+                               dropout, l1_regs, n_hidden, update_finction):
     print "loading data...",
     x = cPickle.load(open(data_file, "rb"))
     data, w2v_matrix, word_idx_map, vocab = x[0], x[1], x[2], x[3]
@@ -97,7 +97,7 @@ def train_and_test_cross_valid(data_file, n_epochs, non_static, batch_size, k_to
     clf = CNNTextClassifier(vocab_size=len(w2v_matrix), word_embedding=word_vect,
                             word_dimension=word_dimentions, sentence_len=sentence_len, n_hidden=n_hidden,
                             windows=windows, n_filters=n_filters, k_top=k_top, activations=activations,
-                            batch_size=batch_size, non_static=non_static, dropout=dropout, l1_regs=L1_regs,
+                            batch_size=batch_size, non_static=non_static, dropout=dropout, l1_regs=l1_regs,
                             seed=seed, n_out=n_out)
 
     print clf.get_params_as_string()
@@ -129,7 +129,7 @@ def save_model(clf):
 
 def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, k_top, n_filters,
                          windows, activations, early_stop, valid_frequency, seed,
-                         word_dimentions, dropout, L1_regs, n_hidden, update_finction):
+                         word_dimentions, dropout, l1_regs, n_hidden, update_finction):
     print "loading data...",
     x = cPickle.load(open(data_file, "rb"))
     data, w2v_matrix, word_idx_map, vocab = x[0], x[1], x[2], x[3]
@@ -157,7 +157,7 @@ def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, 
     clf = CNNTextClassifier(clf_name=clf_name, vocab_size=len(w2v_matrix), word_embedding=word_vect,
                             word_dimension=word_dimentions, sentence_len=sentence_len, n_hidden=n_hidden,
                             windows=windows, n_filters=n_filters, k_top=k_top, activations=activations,
-                            batch_size=batch_size, non_static=non_static, dropout=dropout, L1_regs=L1_regs,
+                            batch_size=batch_size, non_static=non_static, dropout=dropout, l1_regs=l1_regs,
                             seed=seed, n_out=n_out)
 
     print clf.get_params_as_string()
@@ -176,25 +176,26 @@ def test_on_binary_sentiment(data_path, clf_name, n_epochs, batch_size, non_stat
                              valid_frequency, update_finction, l1_regs=tuple(), l2_regs=tuple()):
     # 6920 - тренировочная выборка, 872 - валидац., 1821 - тестовая, vocabulary size = 15448
     # тренировочная выборка, однако, в 23 раза больше - Kalchbrener разбил выборку на
-    train_x_indexes, train_y, train_lengths = dt.read_and_sort_matlab_data(data_path+"train.txt",
+    x_train_ids, y_train, train_lens = dt.read_and_sort_matlab_data(data_path+"train.txt",
                                                                            data_path+"train_lbl.txt")
-    dev_x_indexes, dev_y, dev_lengths = dt.read_and_sort_matlab_data(data_path + "valid.txt",
+    x_valid_ids, y_valid, valid_lens = dt.read_and_sort_matlab_data(data_path + "valid.txt",
                                                                      data_path + "valid_lbl.txt")
-    test_x_indexes, test_y, test_lengths = dt.read_and_sort_matlab_data(data_path + "test.txt",
+    x_test_ids, y_test, test_lens = dt.read_and_sort_matlab_data(data_path + "test.txt",
                                                                         data_path + "test_lbl.txt")
 
-    assert dt.check_all_sentences_have_one_dim(train_x_indexes)
-    sentence_len = len(train_x_indexes[1])
-    n_out = max(train_y)+1
+    assert dt.check_all_sentences_have_one_dim(x_train_ids)
+    sentence_len = len(x_train_ids[1])
+    n_out = max(y_train)+1
     clf = CNNTextClassifier(clf_name=clf_name, vocab_size=15449, word_embedding=None,
-                            word_dimension=word_dimentions, sentence_len=sentence_len,
+                            word_dimension=word_dimentions, sentence_len=None,
                             windows=windows, n_filters=n_filters, k_top=k_top, activations=activations,
                             batch_size=batch_size, non_static=non_static, dropout=dropout,
                             l1_regs=l1_regs, l2_regs=l2_regs,seed=seed, n_out=n_out)
 
     print clf.get_params_as_string()
     try:
-        clf.fit(train_x_indexes, train_y, dev_x_indexes, dev_y, test_x_indexes, test_y,
+        clf.fit(x_train_ids, y_train, x_valid_ids, y_valid, x_test_ids, y_test,
+                train_lens=train_lens, valid_lens=valid_lens, test_lens=test_lens,
                 early_stop=early_stop, valid_frequency=valid_frequency,
                 n_epochs=n_epochs, update_function=update_finction)
     except:
@@ -209,15 +210,15 @@ if __name__ == "__main__":
     start_time = time.time()
 
     # test_on_binary_sentiment(data_path='./data/binarySentiment/', clf_name='dcnn',
-    #                          n_epochs=50, batch_size=40, non_static=True, early_stop=False,
+    #                          n_epochs=50, batch_size=4, non_static=True, early_stop=False,
     #                          k_top=4, n_filters=(6, 14), windows=((7,), (5,)), seed=0, word_dimentions=48,
-    #                          activations=('tanh', 'tanh'), dropout=0.5, valid_frequency=10,
+    #                          activations=('tanh', 'tanh'), dropout=0.5, valid_frequency=20,
     #                          l2_regs=(0.0001 / 2, 0.00003 / 2, 0.000003 / 2, 0.0001 / 2),
     #                          update_finction=adadelta)
 
     test_on_binary_sentiment(data_path='./data/binarySentiment/', clf_name='1cnn',
-                             n_epochs=100, batch_size=50, non_static=True, early_stop=True, valid_frequency=20,
-                             k_top=1, n_filters=(200,), windows=((3, 4),), seed=0,
+                             n_epochs=100, batch_size=50, non_static=True, early_stop=True, valid_frequency=50,
+                             k_top=1, n_filters=(100,), windows=((3, 4),), seed=0,
                              word_dimentions=30, activations=('relu',), dropout=0.2,
                              l1_regs=(0.00001, 0.00003, 0.000003, 0.0001),
                              update_finction=adam)
@@ -237,7 +238,7 @@ if __name__ == "__main__":
     #                      n_epochs=3, batch_size=50, non_static=True, early_stop=True, valid_frequency=20,
     #                      k_top=1, n_filters=(200,), windows=((3, 4),), seed=0, update_finction=adam,
     #                      word_dimentions=None, activations=('relu',), dropout=0.0,
-    #                      L1_regs=(0.0, 0.00001, 0.00001, 0.00001, 0.0001, 0.0001), n_hidden=100)
+    #                      l1_regs=(0.0, 0.00001, 0.00001, 0.00001, 0.0001, 0.0001), n_hidden=100)
 
     # load_and_print_params("./cnn_states/state_2016-06-12-19:53:52")
     # continue_training(path_to_model="./cnn_states/state_2016-06-18-20:03:13",

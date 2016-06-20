@@ -1,3 +1,4 @@
+==========polarity=======================
 dataset name: ./prepocessed_data/polarity_mr_100
 classifier name: MultinomialNB
 best params:
@@ -23,6 +24,7 @@ OPTIMIZATION COMPLETE.
 Best valid score: 0.813333
 Best iter num: 200, best epoch: 2
 
+==========mr_kaggle=======================
 dcnn?? / 1cnn, mr_kaggle
 global_iter 2380, epoch 6, batch 130, mean train cost = 0.187806
 ------------valid score: 0.893200------------
@@ -38,7 +40,8 @@ best params:
 {'clf__fit_prior': True, 'clf__alpha': 0.70000000000000007}
 best score = 0.890040
 
-dataset name: ./prepocessed_data/20_news_mr_100
+==========20_news=============
+dataset name: ./prepocessed_data/20_news
 classifier name: MultinomialNB
 best params:
 {'clf__fit_prior': False, 'clf__alpha': 0.10000000000000001}
@@ -58,6 +61,7 @@ best params:
 best score = 0.772259
 
 
+==========twitter=============
 dataset name: ../../hdfs/preprocessed_data/twitter
 classifier name: MultinomialNB
         'clf__alpha': np.arange(0.1, 2.0, 0.3),
@@ -66,3 +70,48 @@ best params:
 {'clf__fit_prior': True, 'clf__alpha': 1.0000000000000002}
 best score = 0.788536
 
+dataset name: ../../hdfs/preprocessed_data/twitter
+classifier name: SGDClassifier
+best params:
+{'clf__penalty': 'l2', 'clf__loss': 'modified_huber', 'clf__fit_intercept': True, 'clf__alpha': 1.0000000000000001e-05}
+best score = 0.811756
+--- 2784.93501496 seconds ---
+
+dataset name: ../../hdfs/preprocessed_data/twitter
+classifier name: LogisticRegression
+best params:
+{'clf__penalty': 'l2', 'clf__C': 2.2000000000000002, 'clf__solver': 'liblinear'}
+best score = 0.813469
+--- 1923.76216292 seconds ---
+
+
+==========bin_sent=============
+clf_name = dcnn
+vocab_size = 15449
+word_dimension = 48
+non_static = True
+sentence_len = 58
+n_out = 2
+windows = ((7,), (5,))
+n_filters = (6, 14)
+n_hidden = 10
+k_top = 4
+activation = ('tanh', 'tanh')
+dropout = 0.500000
+l1_regs = ()
+l2_regs = (5e-05, 1.5e-05, 1.5e-06, 5e-05)
+batch_size = 40
+seed = 0
+valid_frequency=10
+update_finction=adadelta
+
+global_iter 48020, epoch 12, batch 3063, mean train cost = 0.485674
+------------valid score: 0.829128------------
+Test score = 0.819879.
+
+global_iter 49650, epoch 13, batch 606, mean train cost = 0.528234
+------------valid score: 0.831422------------
+Test score = 0.800659.
+
+Достигла нормальных результатов только к 4ой эпохе
+==================================

@@ -41,7 +41,7 @@ def train_and_test_model_cross_valid(data_file, clf, clf_params, n_jobs, n_folds
 
     print 'clf name = %s' % clf.__class__.__name__
     # LogisticRegression; MultinomialNB; LinearSVC; SGDClassifier
-    text_clf = Pipeline([('vect', CountVectorizer(ngram_range=(1, 2))),
+    text_clf = Pipeline([('vect', CountVectorizer(ngram_range=(1, 2), stop_words='english')),
                          ('tfidf', TfidfTransformer(sublinear_tf=True)),
                          ('clf', clf)])
     # TODO: можно добавить проход по параметрам предобработки:
@@ -57,11 +57,13 @@ def train_and_test_model_cross_valid(data_file, clf, clf_params, n_jobs, n_folds
 
 def train_and_test_models_cross_valid(data_files, clf_names, n_jobs=2, n_folds=10):
     SGDClassifier_params = {
-        'clf__alpha': np.arange(1e-5, 2e-4, 1e-5),
-        'clf__loss': ('hinge', 'log', 'modified_huber', 'squared_hinge', 'perceptron',
-                      'squared_loss', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive'),
+        'clf__alpha': np.arange(2e-4, 2e-3, 2e-4),
+        'clf__loss': ('hinge', 'squared_hinge',
+                      # 'perceptron', 'modified_huber', 'squared_loss'
+                      # 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive'
+                      ),
         'clf__penalty': ('none', 'l2', 'l1', 'elasticnet'),
-        'clf__fit_intercept': (True, False)
+        'clf__fit_intercept': (True,) # False
         # 'clf__learning_rate': ('constant', 'optimal', 'invscaling')
     }
 
@@ -94,6 +96,52 @@ def train_and_test_models_cross_valid(data_files, clf_names, n_jobs=2, n_folds=1
                 raise
 
 
+class Cleaner:
+    def fit(self, _, __):
+        # Заглушка для Pipeline
+        return self
+
+    def transform(self, data):
+        return map(dt.clean_str, data)
+
+
+def train_20_news(n_jobs, n_folds):
+    from sklearn.datasets import fetch_20newsgroups
+    train = fetch_20newsgroups(subset='train', shuffle=False, random_state=100,
+                               remove=('headers', 'footers', 'quotes'))
+    test = fetch_20newsgroups(subset='test', shuffle=False, random_state=100,
+                              remove=('headers', 'footers', 'quotes'))
+
+    x_train = map(dt.clean_str, train.data)
+    x_test = map(dt.clean_str, test.data)
+
+    text_clf = Pipeline([
+                         # ('clean', Cleaner()),
+                         ('vect', CountVectorizer(ngram_range=(1, 2), stop_words='english')),
+                         ('tfidf', TfidfTransformer(sublinear_tf=True)),
+                         ('clf', SGDClassifier(fit_intercept=True, random_state=0))
+                         ])
+
+    SGDClassifier_params = {
+        'clf__alpha': np.arange(4e-5, 2e-3, 2e-5),
+        'clf__loss': ('squared_loss', 'hinge', 'squared_hinge'),
+        'clf__penalty': ('l2', 'elasticnet'),
+    }
+
+    gs_clf = GridSearchCV(text_clf, SGDClassifier_params, n_jobs=n_jobs, cv=n_folds, refit=True, verbose=3)
+    gs_clf.fit(x_train, train.target)
+
+    result_str = list()
+    result_str.append('\n')
+    result_str.append('best params:')
+    result_str.append(str(gs_clf.best_params_))
+    result_str.append('best score = %f' % gs_clf.best_score_)
+    result_str = '\n'.join(result_str)
+    print result_str
+
+    print "test score = " % gs_clf.score(x_test, test.target)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Baseline models grid test.')
     parser.add_argument("--data_files", nargs='+', type=str, default=None, help="List of preprocessed data files.")
@@ -104,16 +152,20 @@ if __name__ == "__main__":
     parser.add_argument("--n_folds", type=int, default=10, help="Number of folds for cross-validation. Default 2.")
     args = vars(parser.parse_args())
     data_files = args['data_files']
-    if data_files is None:
-        dataset_names = ("20_news", "twitter", "polarity", "mr_kaggle")
-        data_files = [dt.get_output_name(dataset_name) for dataset_name in dataset_names]
 
-    print "classifiers:"
-    print args['clf']
-    print "data_files:"
-    print data_files
+    if data_files == ['20_news',]:
+        train_20_news(n_jobs=args['n_jobs'], n_folds=args['n_folds'])
+    else:
+        if data_files is None:
+            dataset_names = ("20_news", "twitter", "polarity", "mr_kaggle")
+            data_files = [dt.get_output_name(dataset_name) for dataset_name in dataset_names]
 
-    start_time = time.time()
-    train_and_test_models_cross_valid(clf_names=args['clf'], data_files=data_files,
-                                      n_jobs=args['n_jobs'], n_folds=args['n_folds'])
-    print("--- %s seconds ---" % (time.time() - start_time))
+        print "classifiers:"
+        print args['clf']
+        print "data_files:"
+        print data_files
+
+        start_time = time.time()
+        train_and_test_models_cross_valid(clf_names=args['clf'], data_files=data_files,
+                                          n_jobs=args['n_jobs'], n_folds=args['n_folds'])
+        print("--- %s seconds ---" % (time.time() - start_time))

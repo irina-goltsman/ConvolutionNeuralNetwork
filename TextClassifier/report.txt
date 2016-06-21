@@ -56,7 +56,11 @@ best params:
 {'clf__penalty': 'l2', 'clf__loss': 'squared_loss', 'clf__fit_intercept': True, 'clf__alpha': 4.0000000000000003e-05}
 best score = 0.772259
 
-
+Отдельно train и test:
+best params:
+{'clf__penalty': 'l2', 'clf__loss': 'hinge', 'clf__alpha': 5.0000000000000002e-05}
+best score = 0.776648
+test score = 0.710967
 ==========twitter=============
 dataset name: ../../hdfs/preprocessed_data/twitter
 classifier name: MultinomialNB
@@ -138,5 +142,14 @@ Best iter num: 45620, best epoch: 14
 Last test score = 0.811093
 Saving state to './cnn_states/state_2016-06-20-12:35:33'...
 --- 6383.1793108 seconds ---
+
+1cnn
+    test_on_binary_sentiment(data_path='./data/binarySentiment/', clf_name='1cnn',
+                             n_epochs=500, batch_size=50, non_static=True, early_stop=False, valid_frequency=50,
+                             k_top=1, n_filters=(100,), windows=((3, 4),), seed=0,
+                             word_dimentions=30, activations=('relu',), dropout=0.2,
+                             l1_regs=(0.00001, 0.00003, 0.000003, 0.0001),
+                             update_finction=adam)
+Last test score = 0.785832.
 
 ==================================

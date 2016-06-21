@@ -177,7 +177,7 @@ def clean_str(string):
     string = re.sub(r"\'re", " \'re", string)
     string = re.sub(r"\'d", " \'d", string)
     string = re.sub(r"\'ll", " \'ll", string)
-    string = re.sub(r"\.", " \. ", string)
+    string = re.sub(r"\.", " . ", string)
     string = re.sub(r",", " , ", string)
     string = re.sub(r":", " : ", string)
     string = re.sub(r"!", " ! ", string)

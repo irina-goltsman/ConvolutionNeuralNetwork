@@ -5,6 +5,7 @@ import numpy as np
 import data_tools as dt
 from sklearn.datasets import fetch_20newsgroups
 import argparse
+import json
 
 
 def load_polarity_data(data_path, max_size=None):
@@ -55,35 +56,38 @@ def load_20_news_data(data_path=None, max_size=None):
     return data
 
 
+def load_amazon(data_path, max_size=None):
+    x_data = []
+    y_data = []
+    with open(data_path, 'r') as f:
+        count = 0
+        for line in f:
+            row = json.loads(line)
+            text = row['summary'] + '\n' + row['reviewText']
+            x_data.append(text)
+            y_data.append(row['overall'])
+            count += 1
+            if count == max_size:
+                break
+    data = pd.DataFrame({"text": x_data, "label": y_data})
+    return data
+
+
 # TODO:
 def load_dbpedia_data(data_path, max_size=None):
     data = pd.read_csv(data_path, sep=',', nrows=max_size, usecols=[2])[4:]
     print data
 
 
-def load_binary_sentiment(data_path, max_size=None):
-    # 6920 - тренировочная выборка, 872 - валидац., 1821 - тестовая
-    # тренировочная выборка, однако, в 23 раза больше - Kalchbrener разбил выборку на
-    train_x_indexes, train_y, train_lengths = dt.read_and_sort_matlab_data(data_path+"train.txt",
-                                                                           data_path+"train_lbl.txt")
-    dev_x_indexes, dev_y, dev_lengths = dt.read_and_sort_matlab_data(data_path + "valid.txt",
-                                                                     data_path + "valid_lbl.txt")
-    test_x_indexes, test_y, test_lengths = dt.read_and_sort_matlab_data(data_path + "test.txt",
-                                                                        data_path + "test_lbl.txt")
-    print train_x_indexes.shape
-    print dev_x_indexes.shape
-    print test_x_indexes.shape
-    # for i in xrange(1, 57):
-    #     print train_lengths.count(i)
-    # for i in xrange(15441):
-    #     print "sentence: '%s', label: %d" % (str(train_x_indexes[i][0]), train_y[i])
-
-
-def examine_dataset(data_path, load_function):
-    data = load_function(data_path)
+def examine_dataset(data_path, load_function, max_size):
+    data = load_function(data_path, max_size)
     print "data loaded"
-    print "number of sentences: " + str(len(data))
+    print "number of texts: " + str(len(data))
     print "example of data: " + data["text"][1]
+    print "label: %d" % data["label"][1]
+    # sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
+    # data["text"].apply(sent_detector.tokenize)
+
     print "cleaning..."
     data["cleared_text"] = data["text"].apply(dt.clean_str)
     print "cleaning finished"
@@ -106,14 +110,15 @@ data_files = {"twitter": "./data/tweets/Sentiment Analysis Dataset.csv",
               "polarity": "./data/rt-polaritydata/",
               "20_news": None,
               "dbpedia": "./data/DBpedia/Satellite.csv",
-              "bin_sent": "./data/binarySentiment/"}
+              "bin_sent": "./data/binarySentiment/",
+              "amazon": "./data/amazon/reviews_Beauty.json"}
 
 loaders = {"twitter": load_twitter_data,
            "mr_kaggle": load_reviews_data,
            "polarity": load_polarity_data,
            "20_news": load_20_news_data,
            "dbpedia": load_dbpedia_data,
-           "bin_sent": load_binary_sentiment}
+           "amazon": load_amazon}
 
 
 # --data_path=./data/tweets/Sentiment\ Analysis\ Dataset.csv --dataset_name=twitter
@@ -135,15 +140,15 @@ if __name__ == "__main__":
     if args['data_path'] is None:
         args['data_path'] = data_files[args['dataset_name']]
 
-    load_binary_sentiment(args['data_path'])
+    # load_binary_sentiment(args['data_path'])
 
     if args['examine']:
         print args
-        examine_dataset(args['data_path'], load_function=loaders[args['dataset_name']])
+        examine_dataset(args['data_path'], load_function=loaders[args['dataset_name']], max_size=args['max_size'])
 
     else:
         if args['output_path'] is None:
-            args['output_path'] = dt.get_output_name(args['dataset_name'], model_name, max_size)
+            args['output_path'] = dt.get_output_name(args['dataset_name'], model_name, args['max_size'])
         print args
         dt.preprocess_dataset(model_path=args['model_path'], data_path=args['data_path'],
                               load_function=loaders[args['dataset_name']],

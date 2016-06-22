@@ -154,11 +154,6 @@ Last test score = 0.785832.
 
 ==================================
 amazon full:
- [CV] .......... clf__C=1.0, clf__solver=lbfgs, score=0.738417 -42.4min
-
-
-fit_prior: False alpha: 0.7
-
-penalty: l2
-loss: 'hinge'
-alpha: 7.0e-5
+[CV] .......... clf__C=1.0, clf__solver=lbfgs, score=0.738417 -42.4min
+[CV] ...... clf__C=1.0, clf__solver=newton-cg, score=0.739802 -52.6min
+[CV] ...... clf__C=1.0, clf__solver=newton-cg, score=0.734168 -56.0min

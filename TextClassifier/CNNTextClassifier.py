@@ -6,7 +6,7 @@ from sklearn.base import BaseEstimator
 import cPickle as pickle
 import theano
 from pandas.core.series import Series
-from sklearn.cross_validation import train_test_split
+# from sklearn.cross_validation import train_test_split
 import time
 import warnings
 from networks import *
@@ -248,6 +248,22 @@ class CNNTextClassifier(BaseEstimator):
         else:
             return X[id * self.batch_size: (id + 1) * self.batch_size]
 
+    @staticmethod
+    def train_test_split(X, y, lengths, test_size, shuffle=True, rng=np.random.RandomState()):
+        permutation = rng.permutation(len(X))
+        ind_test = permutation[:test_size]
+        ind_train = permutation[test_size:]
+        if not shuffle:
+            ind_test = ind_test.sort()
+            ind_train = ind_train.sort()
+        if lengths is not None:
+            train_lengths = lengths[ind_train]
+            test_lengths = lengths[ind_test]
+        else:
+            train_lengths = None
+            test_lengths = None
+        return X[ind_train], X[ind_test], y[ind_train], y[ind_test], train_lengths, test_lengths
+
     # TODO: разбери эту огромную функцию на маленькие читабельные части
     def fit(self, x_train, y_train, x_valid=None, y_valid=None, x_test=None, y_test=None,
             train_lens=None, valid_lens=None, test_lens=None,
@@ -313,9 +329,10 @@ class CNNTextClassifier(BaseEstimator):
         if x_valid is None or y_valid is None:
             num_val_batches = int(np.floor(num_batches * validation_part))
             num_train_batches = num_batches - num_val_batches
-            x_train, x_valid, y_train, y_valid = train_test_split(x_train, y_train,
-                                                                  test_size=num_val_batches * self.batch_size,
-                                                                  random_state=self.rng)
+            x_train, x_valid, y_train, y_valid, train_lens, valid_lens =\
+                self.train_test_split(x_train, y_train, train_lens,
+                                      test_size=num_val_batches * self.batch_size,
+                                      rng=self.rng)
         else:
             num_train_batches = num_batches
 

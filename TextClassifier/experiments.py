@@ -128,14 +128,14 @@ def save_model(clf):
 
 
 def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, k_top, n_filters,
-                         windows, activations, early_stop, valid_frequency, seed,
+                         windows, activations, early_stop, valid_frequency, seed, big_dataset,
                          word_dimentions, dropout, l1_regs, n_hidden, update_finction):
     print "loading data...",
     x = cPickle.load(open(data_file, "rb"))
     try:
         data, w2v_matrix, word_idx_map, vocab = x[0], x[1], x[2], x[3]
     except IndexError:
-        data = x[0]
+        data, word_idx_map = x[0], x[1]
         assert word_dimentions is not None
     print "data loaded!"
     print "%d samples." % len(data)
@@ -145,20 +145,31 @@ def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, 
     else:
         word_vect = None
 
+    vocab_size = len(word_idx_map) + 1
+    print "vocab size = %d" % vocab_size
     print data["text"][1]
 
     print "word's dimentions = %d" % word_dimentions
-    counts = data["text"].apply(dt.words_count)
-    max_l = max(counts)
-    print "max length of text = %d words" % max_l
-    print "min lenght of text = %d words" % min(counts)
-    data = dt.add_idx_features(data, word_idx_map, max_l=max_l, filter_h=5)
+    data["counts"] = data["text"].apply(dt.words_count)
+
+    if big_dataset:
+        max_l = data["counts"].quantile(0.95)
+        print "text's 0.95 quantile = %d words" % max_l
+    else:
+        max_l = max(data["counts"])
+
+    print "max length of text = %d words" % max(data["counts"])
+    print "min lenght of text = %d words" % min(data["counts"])
+    print "idx features creation..."
+    dt.add_idx_features(data, word_idx_map, filter_h=5, max_l=max_l)
+    print "idx features creation finished"
 
     assert dt.check_all_sentences_have_one_dim(data["idx_features"])
     sentence_len = len(data["idx_features"][1])
-    n_out = max(data["label"])+1
+    print "Padded text's len: %d words" % sentence_len
 
-    clf = CNNTextClassifier(clf_name=clf_name, vocab_size=len(w2v_matrix), word_embedding=word_vect,
+    n_out = max(data["label"])+1
+    clf = CNNTextClassifier(clf_name=clf_name, vocab_size=vocab_size, word_embedding=word_vect,
                             word_dimension=word_dimentions, sentence_len=sentence_len, n_hidden=n_hidden,
                             windows=windows, n_filters=n_filters, k_top=k_top, activations=activations,
                             batch_size=batch_size, non_static=non_static, dropout=dropout, l1_regs=l1_regs,
@@ -230,8 +241,8 @@ if __name__ == "__main__":
     print("--- %s seconds ---" % (time.time() - start_time))
 
     max_size = None
-    model_name = "mr_100"
-    dataset_name = "amazon"
+    model_name = None
+    dataset_name = "20_news"
     # train_and_save_model(clf_name='dcnn', data_file=dt.get_output_name(dataset_name, model_name),
     #                      n_epochs=40, batch_size=50, non_static=True, early_stop=False,
     #                      k_top=4, n_filters=(20, 20), windows=((7,), (5,)), seed=0, word_dimentions=40,
@@ -242,7 +253,8 @@ if __name__ == "__main__":
                          n_epochs=3, batch_size=50, non_static=True, early_stop=True, valid_frequency=20,
                          k_top=1, n_filters=(100,), windows=((3, 4),), seed=0, update_finction=adam,
                          word_dimentions=40, activations=('relu',), dropout=0.2,
-                         l1_regs=(0.00001, 0.00001, 0.00001, 0.0001, 0.0001), n_hidden=100)
+                         l1_regs=(0.00001, 0.00001, 0.00001, 0.0001, 0.0001), n_hidden=100,
+                         big_dataset=True)
 
     # load_and_print_params("./cnn_states/state_2016-06-12-19:53:52")
     # continue_training(path_to_model="./cnn_states/state_2016-06-18-20:03:13",

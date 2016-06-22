@@ -126,7 +126,7 @@ loaders = {"twitter": load_twitter_data,
 # --output_path=../../hdfs/preprocessed_data/twitter_google_300
 if __name__ == "__main__":
     max_size = None
-    model_name = "mr_100"
+    model_name = None
     parser = argparse.ArgumentParser(description='Preprocess given dataset.')
     parser.add_argument("--max_size", type=int, default=max_size, help='Max number of rows should be processed.')
     parser.add_argument("--dataset_name", type=str, default="amazon", help='Dataset short name.')

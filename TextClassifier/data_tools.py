@@ -188,22 +188,50 @@ def clean_str(string):
     return string.strip()
 
 
+def build_full_dict(data):
+    print 'Building dictionary..',
+    wordcount = dict()
+    for text in data:
+        words = text.strip().lower().split()
+        for w in words:
+            if w not in wordcount:
+                wordcount[w] = 1
+            else:
+                wordcount[w] += 1
+
+    counts = wordcount.values()
+    unique_words = wordcount.keys()
+
+    # Наиболее популярные слова будут иметь наименьший индекс
+    sorted_idx = np.argsort(counts)[::-1]
+
+    worddict = dict()
+    for idx, ss in enumerate(sorted_idx):
+        # Оставлю 0 символ для padding, 1 - для неизвестных слов
+        worddict[unique_words[ss]] = idx + 2
+
+    print '%d total words, %d unique words' % (int(np.sum(counts)), len(unique_words))
+    return worddict
+
+
 def preprocess_dataset(data_path, load_function, output="prepared_data", model_path=None, max_size=None):
     start_time = time.time()
     print "loading data...\n",
     data = load_function(data_path, max_size)
     print "data loaded!"
-    print "number of sentences: " + str(len(data))
+    print "number of samples: " + str(len(data))
     data["text"] = data["text"].apply(clean_str)
-    vocabulary = make_vocab_list(data["text"])
-    print "vocab size: " + str(len(vocabulary))
+
     if model_path is None:
-        cPickle.dump([data, len(vocabulary)], open(output, "wb"))
+        # TODO: обрезать словарь? выкидывать стоп-слова?
+        word_idx_map = build_full_dict(data["text"])
+        cPickle.dump([data, word_idx_map], open(output, "wb"))
         print "dataset without embedding model preprocessed and saved as '%s'" % output
         print("--- %s seconds ---" % (time.time() - start_time))
         return
 
-
+    vocabulary = make_vocab_list(data["text"])
+    print "vocab size: " + str(len(vocabulary))
     print "Word embedding model is loading from %s." % model_path
     word_vec, dim = load_w2v(model_path, vocabulary)
     # word_vec, dim = load_bin_vec(model_path, vocabulary)
@@ -220,20 +248,20 @@ def preprocess_dataset(data_path, load_function, output="prepared_data", model_p
     print("--- %s seconds ---" % (time.time() - start_time))
 
 
-def add_idx_features(data, word_idx_map, max_l=51, filter_h=5):
+def add_idx_features(data, word_idx_map, filter_h=1, max_l=None):
     """
     Transforms sentences into a 2-d matrix.
     """
     data_features = pd.Series([[]], index=data.index)
     for i in data.index:
-        data_features[i] = get_idx_from_sent(data["text"][i], word_idx_map, max_l, filter_h)
+        data_features[i] = get_idx_from_sent(data["text"][i], word_idx_map, filter_h, max_l)
     data["idx_features"] = data_features
-    return data
 
 
-def get_idx_from_sent(sent, word_idx_map, max_l=51, filter_h=5):
+def get_idx_from_sent(sent, word_idx_map, filter_h=1, max_l=None):
     """
-    Transforms sentence into a list of indices. Pad with zeroes.
+    По умолчанию просто переводит текст в набор индексов, при filter_h > 1 добавляет в начале и в конце нули
+    При max_l != None добивает нуждую длину нулями, либо наоборот, обрезает текст
     """
     x = []
     pad = filter_h - 1
@@ -241,11 +269,20 @@ def get_idx_from_sent(sent, word_idx_map, max_l=51, filter_h=5):
         # Под нулевым индексом в словаре word_idx_map - пустое слово.
         x.append(0)
     words = sent.split()
+
     for word in words:
+        if (max_l is not None) and (len(x) >= max_l):
+            break
         if word in word_idx_map:
             x.append(word_idx_map[word])
-    while len(x) < max_l + 2 * pad:
-        x.append(0)
+
+    if max_l is None:
+        for i in xrange(pad):
+            x.append(0)
+    else:
+        while len(x) < max_l + 2 * pad:
+            x.append(0)
+
     return x
 
 

@@ -132,7 +132,11 @@ def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, 
                          word_dimentions, dropout, l1_regs, n_hidden, update_finction):
     print "loading data...",
     x = cPickle.load(open(data_file, "rb"))
-    data, w2v_matrix, word_idx_map, vocab = x[0], x[1], x[2], x[3]
+    try:
+        data, w2v_matrix, word_idx_map, vocab = x[0], x[1], x[2], x[3]
+    except IndexError:
+        data = x[0]
+        assert word_dimentions is not None
     print "data loaded!"
     print "%d samples." % len(data)
     if word_dimentions is None:
@@ -216,29 +220,29 @@ if __name__ == "__main__":
     #                          l2_regs=(0.0001 / 2, 0.00003 / 2, 0.000003 / 2, 0.0001 / 2),
     #                          update_finction=adadelta)
 
-    test_on_binary_sentiment(data_path='./data/binarySentiment/', clf_name='1cnn',
-                             n_epochs=100, batch_size=50, non_static=True, early_stop=True, valid_frequency=50,
-                             k_top=1, n_filters=(100,), windows=((3, 4),), seed=0,
-                             word_dimentions=30, activations=('relu',), dropout=0.2,
-                             l1_regs=(0.00001, 0.00003, 0.000003, 0.0001),
-                             update_finction=adam)
+    # test_on_binary_sentiment(data_path='./data/binarySentiment/', clf_name='1cnn',
+    #                          n_epochs=100, batch_size=50, non_static=True, early_stop=True, valid_frequency=50,
+    #                          k_top=1, n_filters=(100,), windows=((3, 4),), seed=0,
+    #                          word_dimentions=30, activations=('relu',), dropout=0.2,
+    #                          l1_regs=(0.00001, 0.00003, 0.000003, 0.0001),
+    #                          update_finction=adam)
 
     print("--- %s seconds ---" % (time.time() - start_time))
 
     max_size = None
     model_name = "mr_100"
-    dataset_name = "polarity"
+    dataset_name = "amazon"
     # train_and_save_model(clf_name='dcnn', data_file=dt.get_output_name(dataset_name, model_name),
     #                      n_epochs=40, batch_size=50, non_static=True, early_stop=False,
     #                      k_top=4, n_filters=(20, 20), windows=((7,), (5,)), seed=0, word_dimentions=40,
     #                      activations=('iden', 'relu'), dropout=0.5, valid_frequency=20,
     #                      L1_regs=(0.00001, 0.00003, 0.000003, 0.0001), n_hidden=100)
     # #
-    # train_and_save_model(clf_name='1cnn', data_file=dt.get_output_name(dataset_name, model_name, max_size),
-    #                      n_epochs=3, batch_size=50, non_static=True, early_stop=True, valid_frequency=20,
-    #                      k_top=1, n_filters=(200,), windows=((3, 4),), seed=0, update_finction=adam,
-    #                      word_dimentions=None, activations=('relu',), dropout=0.0,
-    #                      l1_regs=(0.0, 0.00001, 0.00001, 0.00001, 0.0001, 0.0001), n_hidden=100)
+    train_and_save_model(clf_name='1cnn', data_file=dt.get_output_name(dataset_name, model_name, max_size),
+                         n_epochs=3, batch_size=50, non_static=True, early_stop=True, valid_frequency=20,
+                         k_top=1, n_filters=(100,), windows=((3, 4),), seed=0, update_finction=adam,
+                         word_dimentions=40, activations=('relu',), dropout=0.2,
+                         l1_regs=(0.00001, 0.00001, 0.00001, 0.0001, 0.0001), n_hidden=100)
 
     # load_and_print_params("./cnn_states/state_2016-06-12-19:53:52")
     # continue_training(path_to_model="./cnn_states/state_2016-06-18-20:03:13",

@@ -38,8 +38,10 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 # TODO: используя twitter датасет настроить параметры dcnn
 # TODO: передавать вместе с датасетом реальную длину предложения и заменить k-max-pooling на dynamic k-max-pooling
 # TODO: обучить рекурентную сеточку???
-# TODO: убрать стоп слова и протестить на бейзлайнах ещё раз
 # TODO: собрать свою модель
+# TODO: распарсить dbpedia, проверить на бейзлайнах
+
+# TODO: при превращении текстов в набор int запоминать реальную длину и передавать её в функцию обучения
 class CNNTextClassifier(BaseEstimator):
     def __init__(self, clf_name='1cnn', vocab_size=None, word_dimension=100, word_embedding=None, non_static=True,
                  batch_size=100, sentence_len=None, n_out=2, k_top=1, seed=0,

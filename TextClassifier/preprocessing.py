@@ -93,7 +93,7 @@ def examine_dataset(data_path, load_function, max_size):
     print "cleaning finished"
     print "example of cleared data: " + data["cleared_text"][1]
     print "vocab list creation..."
-    vocabulary = dt.make_vocab_list(data["text"])
+    vocabulary = dt.make_vocab_list(data["cleared_text"])
     print "vocab size: " + str(len(vocabulary))
 
     data["length"] = data["text"].apply(dt.words_count)
@@ -126,10 +126,10 @@ loaders = {"twitter": load_twitter_data,
 # --output_path=../../hdfs/preprocessed_data/twitter_google_300
 if __name__ == "__main__":
     max_size = None
-    model_name = None
+    model_name = "mr_100"
     parser = argparse.ArgumentParser(description='Preprocess given dataset.')
     parser.add_argument("--max_size", type=int, default=max_size, help='Max number of rows should be processed.')
-    parser.add_argument("--dataset_name", type=str, default="mr_kaggle", help='Dataset short name.')
+    parser.add_argument("--dataset_name", type=str, default="amazon", help='Dataset short name.')
     parser.add_argument("--model_path", type=str, default=models[model_name] if model_name is not None else None,
                         help='Path to word embedding model.')
     parser.add_argument("--data_path", type=str, default=None, help='Path to dataset.')

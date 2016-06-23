@@ -40,6 +40,16 @@ best params:
 {'clf__fit_prior': True, 'clf__alpha': 0.70000000000000007}
 best score = 0.890040
 
+train_and_save_model(clf_name='1cnn', data_file=dt.get_output_name(dataset_name, model_name, max_size),
+                     n_epochs=15, batch_size=50, non_static=True, early_stop=True, valid_frequency=40,
+                     k_top=1, n_filters=(100,), windows=((3, 4, 5),), seed=0, update_finction=adam,
+                     word_dimentions=None, activations=('relu',), dropout=0.5,
+                     l2_regs=(0, 0.00005, 0.00005, 0.00005, 0.00005),
+                     l1_regs=(0, 0.0001, 0.0001, 0.0001, 0.0001), n_hidden=100,
+                     big_dataset=True)
+global_iter 860, epoch 2, batch 410, mean train cost = 0.392985
+------------valid score: 0.892000------------
+
 ==========20_news=============
 dataset name: ./prepocessed_data/20_news
 classifier name: MultinomialNB
@@ -164,13 +174,60 @@ amazon full:
 dataset name: /home/igoltsman/hdfs/preprocessed_data/amazon_1000000
 classifier name: LogisticRegression
 best params:
-{'clf__C': 1.7999999999999998, 'clf__solver': 'lbfgs'}
+{'clf__C': 1.8, 'clf__solver': 'lbfgs'}
 best score = 0.743014
 --- 23715.153753 seconds --
 
 dataset name: /home/igoltsman/hdfs/preprocessed_data/amazon_1000000
 classifier name: MultinomialNB
 best params:
-{'clf__fit_prior': True, 'clf__alpha': 0.10000000000000001}
+{'clf__fit_prior': True, 'clf__alpha': 0.1}
 best score = 0.671529
 --- 3059.67851782 seconds ---
+
+dataset name: /home/igoltsman/hdfs/preprocessed_data/amazon_1000000
+classifier name: SGDClassifier
+best params:
+{'clf__penalty': 'none', 'clf__loss': 'hinge', 'clf__alpha': 4e-05}
+best score = 0.735709
+
+
+1cnn:
+train_and_save_model(clf_name='1cnn', data_file=dt.get_output_name(dataset_name, model_name, max_size),
+                     n_epochs=15, batch_size=50, non_static=True, early_stop=True, valid_frequency=20,
+                     k_top=1, n_filters=(100,), windows=((3, 4),), seed=0, update_finction=adam,
+                     word_dimentions=40, activations=('relu',), dropout=0.2,
+                     l1_regs=(0.00001, 0.00001, 0.00001, 0.0001, 0.0001), n_hidden=100,
+                     l2_regs=(0.0001 / 2, 0.00003 / 2, 0.000003 / 2, 0.0001 / 2),
+                     big_dataset=True)
+
+global_iter 7400, epoch 1, batch 7400, mean train cost = 0.799833
+------------valid score: 0.737870------------
+global_iter 7540, epoch 1, batch 7540, mean train cost = 0.751871
+------------valid score: 0.738320------------
+global_iter 8000, epoch 1, batch 8000, mean train cost = 0.767206
+------------valid score: 0.739410------------
+global_iter 8960, epoch 1, batch 8960, mean train cost = 0.758846
+------------valid score: 0.741110------------
+global_iter 9000, epoch 1, batch 9000, mean train cost = 0.783307
+------------valid score: 0.741520------------
+global_iter 9060, epoch 1, batch 9060, mean train cost = 0.782503
+------------valid score: 0.741740------------
+global_iter 9080, epoch 1, batch 9080, mean train cost = 0.799477
+------------valid score: 0.742440------------
+global_iter 9820, epoch 1, batch 9820, mean train cost = 0.799475
+------------valid score: 0.743480------------
+global_iter 10080, epoch 1, batch 10080, mean train cost = 0.805060
+------------valid score: 0.743760------------
+global_iter 10100, epoch 1, batch 10100, mean train cost = 0.796102
+------------valid score: 0.743940------------
+global_iter 10400, epoch 1, batch 10400, mean train cost = 0.760074
+------------valid score: 0.744390------------
+global_iter 11380, epoch 1, batch 11380, mean train cost = 0.771251
+------------valid score: 0.745700------------
+global_iter 11700, epoch 1, batch 11700, mean train cost = 0.798603
+------------valid score: 0.746040------------
+global_iter 12500, epoch 1, batch 12500, mean train cost = 0.782860
+------------valid score: 0.747140------------
+global_iter 12940, epoch 1, batch 12940, mean train cost = 0.825887
+------------valid score: 0.747410------------

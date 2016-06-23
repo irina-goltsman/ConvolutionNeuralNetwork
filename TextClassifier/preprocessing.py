@@ -92,13 +92,17 @@ def examine_dataset(data_path, load_function, max_size):
     data["cleared_text"] = data["text"].apply(dt.clean_str)
     print "cleaning finished"
     print "example of cleared data: " + data["cleared_text"][1]
-    print "vocab list creation..."
-    vocabulary = dt.make_vocab_list(data["cleared_text"])
+    vocabulary = dt.build_full_dict(data["cleared_text"])
+    word_idx_map = dt.build_word_idx_map(vocabulary)
     print "vocab size: " + str(len(vocabulary))
+    print "max vocabulary value: %d" % max(word_idx_map.values())
 
     data["length"] = data["text"].apply(dt.words_count)
+    data["cleared_length"] = data["cleared_text"].apply(dt.words_count)
     print "max length of text = %d words" % max(data['length'])
     print "min lenght of text = %d words" % min(data['length'])
+    print "max length of cleared text = %d words" % max(data['cleared_length'])
+    print "min lenght of cleared text = %d words" % min(data['cleared_length'])
     print data.describe(percentiles=[.25, .5, .75, .8, .9, .95, .99])
 
 

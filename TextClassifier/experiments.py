@@ -137,7 +137,7 @@ def save_model(clf):
 
 def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, k_top, n_filters,
                          windows, activations, early_stop, valid_frequency, seed, big_dataset,
-                         word_dimentions, dropout, l1_regs, n_hidden, update_finction):
+                         word_dimentions, dropout, l1_regs, l2_regs, n_hidden, update_finction):
     print "loading data...",
     x = cPickle.load(open(data_file, "rb"))
     try:
@@ -154,7 +154,7 @@ def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, 
         word_vect = None
 
     vocab_size = len(word_idx_map) + 1
-    print "vocab size = %d" % vocab_size
+    print "vocab size (with pad symbol) = %d" % vocab_size
     print data["text"][1]
 
     print "word's dimentions = %d" % word_dimentions
@@ -181,7 +181,7 @@ def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, 
                             word_dimension=word_dimentions, sentence_len=sentence_len, n_hidden=n_hidden,
                             windows=windows, n_filters=n_filters, k_top=k_top, activations=activations,
                             batch_size=batch_size, non_static=non_static, dropout=dropout, l1_regs=l1_regs,
-                            seed=seed, n_out=n_out)
+                            l2_regs=l2_regs, seed=seed, n_out=n_out)
 
     print clf.get_params_as_string()
 
@@ -222,22 +222,24 @@ def test_on_binary_sentiment(data_path, clf_name, n_epochs, batch_size, non_stat
                 early_stop=early_stop, valid_frequency=valid_frequency,
                 n_epochs=n_epochs, update_function=update_finction)
     except:
-        save_model(clf)
+        print
+        # save_model(clf)
         raise
     save_model(clf)
 
-# avaliable_datasets = ("twitter", "mr_kaggle", "polarity", "20_news")
 # available_models = ("mr_100", "google_300")
+big_dataset = {'polarity': False, 'mr_kaggle': True,
+               '20_news': True, 'twitter': True, 'amazon': True}
 
 if __name__ == "__main__":
     start_time = time.time()
 
-    # test_on_binary_sentiment(data_path='./data/binarySentiment/', clf_name='dcnn',
-    #                          n_epochs=50, batch_size=4, non_static=True, early_stop=False,
-    #                          k_top=4, n_filters=(6, 14), windows=((7,), (5,)), seed=0, word_dimentions=48,
-    #                          activations=('tanh', 'tanh'), dropout=0.5, valid_frequency=20,
-    #                          l2_regs=(0.0001 / 2, 0.00003 / 2, 0.000003 / 2, 0.0001 / 2),
-    #                          update_finction=adadelta)
+    test_on_binary_sentiment(data_path='./data/binarySentiment/', clf_name='dcnn',
+                             n_epochs=50, batch_size=4, non_static=True, early_stop=False,
+                             k_top=4, n_filters=(6, 14), windows=((7,), (5,)), seed=0, word_dimentions=48,
+                             activations=('tanh', 'tanh'), dropout=0.5, valid_frequency=20,
+                             l2_regs=(0.0001 / 2, 0.00003 / 2, 0.000003 / 2, 0.0001 / 2),
+                             update_finction=adadelta)
 
     # test_on_binary_sentiment(data_path='./data/binarySentiment/', clf_name='1cnn',
     #                          n_epochs=100, batch_size=50, non_static=True, early_stop=True, valid_frequency=50,
@@ -248,21 +250,23 @@ if __name__ == "__main__":
 
     print("--- %s seconds ---" % (time.time() - start_time))
 
-    max_size = 1000000
+    max_size = None
     model_name = None
-    dataset_name = "amazon"
-    # train_and_save_model(clf_name='dcnn', data_file=dt.get_output_name(dataset_name, model_name),
-    #                      n_epochs=40, batch_size=50, non_static=True, early_stop=False,
-    #                      k_top=4, n_filters=(20, 20), windows=((7,), (5,)), seed=0, word_dimentions=40,
-    #                      activations=('iden', 'relu'), dropout=0.5, valid_frequency=20,
-    #                      L1_regs=(0.00001, 0.00003, 0.000003, 0.0001), n_hidden=100)
-    # #
-    train_and_save_model(clf_name='1cnn', data_file=dt.get_output_name(dataset_name, model_name, max_size),
-                         n_epochs=15, batch_size=50, non_static=True, early_stop=True, valid_frequency=20,
-                         k_top=1, n_filters=(100,), windows=((3, 4),), seed=0, update_finction=adam,
-                         word_dimentions=40, activations=('relu',), dropout=0.2,
-                         l1_regs=(0.00001, 0.00001, 0.00001, 0.0001, 0.0001), n_hidden=100,
-                         big_dataset=True)
+    dataset_name = "mr_kaggle"
+    train_and_save_model(clf_name='dcnn', data_file=dt.get_output_name(dataset_name, model_name),
+                         n_epochs=40, batch_size=4, non_static=True, early_stop=False,
+                         k_top=4, n_filters=(6, 14), windows=((7,), (5,)), seed=0, word_dimentions=40,
+                         activations=('tanh', 'tanh'), dropout=0.5, valid_frequency=20,
+                         l2_regs=(0.00001, 0.00003, 0.000003, 0.0001), n_hidden=100, l1_regs=list(),
+                         big_dataset=big_dataset[dataset_name], update_finction=adadelta)
+    #
+    # train_and_save_model(clf_name='1cnn', data_file=dt.get_output_name(dataset_name, model_name, max_size),
+    #                      n_epochs=15, batch_size=50, non_static=True, early_stop=True, valid_frequency=40,
+    #                      k_top=1, n_filters=(100,), windows=((3, 4, 5),), seed=0, update_finction=adam,
+    #                      word_dimentions=None, activations=('relu',), dropout=0.5,
+    #                      l2_regs=(0, 0.00005, 0.00005, 0.00005, 0.00005),
+    #                      l1_regs=(0, 0.0001, 0.0001, 0.0001, 0.0001), n_hidden=100,
+    #                      big_dataset=big_dataset[dataset_name])
 
     # load_and_print_params("./cnn_states/state_2016-06-12-19:53:52")
     # continue_training(path_to_model="./cnn_states/state_2016-06-23-03:55:19",

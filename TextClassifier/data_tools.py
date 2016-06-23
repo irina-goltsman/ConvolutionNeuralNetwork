@@ -88,17 +88,6 @@ def get_output_name(dataset_name, model_name=None, max_size=None, output_folder=
     return output
 
 
-def make_vocab_list(data, min_df=1):
-    '''
-    :param data: массив текстов
-    :param min_df: минимальное количество вхождения слов для его учёта
-    :return: словарь, для каждого слова подсчитано число его вхождений в датасете
-    '''
-    vectorizer = CountVectorizer(min_df=min_df)
-    vectorizer.fit(data)
-    return vectorizer.vocabulary_
-
-
 def load_bin_vec(fname, vocab):
     """
     Нет смысла сохранять всю модель Word2Vec, сохраню только те слова, которые встречаются в датасете.
@@ -198,20 +187,23 @@ def build_full_dict(data):
                 wordcount[w] = 1
             else:
                 wordcount[w] += 1
+    return wordcount
 
+
+def build_word_idx_map(wordcount):
     counts = wordcount.values()
     unique_words = wordcount.keys()
 
     # Наиболее популярные слова будут иметь наименьший индекс
     sorted_idx = np.argsort(counts)[::-1]
 
-    worddict = dict()
+    word_idx_map = dict()
     for idx, ss in enumerate(sorted_idx):
-        # Оставлю 0 символ для padding, 1 - для неизвестных слов
-        worddict[unique_words[ss]] = idx + 2
+        # Оставлю символ 0 для padding
+        word_idx_map[unique_words[ss]] = idx + 1
 
     print '%d total words, %d unique words' % (int(np.sum(counts)), len(unique_words))
-    return worddict
+    return word_idx_map
 
 
 def preprocess_dataset(data_path, load_function, output="prepared_data", model_path=None, max_size=None):
@@ -221,17 +213,17 @@ def preprocess_dataset(data_path, load_function, output="prepared_data", model_p
     print "data loaded!"
     print "number of samples: " + str(len(data))
     data["text"] = data["text"].apply(clean_str)
+    vocabulary = build_full_dict(data["text"])
+    print "vocabulary size = %d" % len(vocabulary)
 
     if model_path is None:
         # TODO: обрезать словарь? выкидывать стоп-слова?
-        word_idx_map = build_full_dict(data["text"])
+        word_idx_map = build_word_idx_map(vocabulary)
         cPickle.dump([data, word_idx_map], open(output, "wb"))
         print "dataset without embedding model preprocessed and saved as '%s'" % output
         print("--- %s seconds ---" % (time.time() - start_time))
         return
 
-    vocabulary = make_vocab_list(data["text"])
-    print "vocab size: " + str(len(vocabulary))
     print "Word embedding model is loading from %s." % model_path
     word_vec, dim = load_w2v(model_path, vocabulary)
     # word_vec, dim = load_bin_vec(model_path, vocabulary)

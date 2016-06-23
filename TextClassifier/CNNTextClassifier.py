@@ -46,7 +46,7 @@ class CNNTextClassifier(BaseEstimator):
     def __init__(self, clf_name='1cnn', vocab_size=None, word_dimension=100, word_embedding=None, non_static=True,
                  batch_size=100, sentence_len=None, n_out=2, k_top=1, seed=0,
                  windows=((5, 6), (4,)), n_filters=(10, 25), n_hidden=10, activations=('tanh', 'tanh'),
-                 dropout=0.5, l1_regs = list(), l2_regs=(0.0001 / 2, 0.00003 / 2, 0.000003 / 2, 0.0001 / 2)):
+                 dropout=0.5, l1_regs = list(), l2_regs=list()):
         """
         :param clf_name: имя сети, доступно: '1cnn', 'dcnn'
         :param vocab_size: размер словаря
@@ -155,12 +155,13 @@ class CNNTextClassifier(BaseEstimator):
         print "Preparing for training..."
         regularizable_layers = []
         for layer in lasagne.layers.get_all_layers(self.network):
-            if isinstance(layer, (CNN.embeddings.SentenceEmbeddingLayer,
+            if isinstance(layer, (
+                                  CNN.embeddings.SentenceEmbeddingLayer,
                                   CNN.Conv1DLayerSplitted,
                                   lasagne.layers.conv.Conv2DLayer,
                                   lasagne.layers.DenseLayer)):
                 regularizable_layers.append(layer)
-        print "num of l1_layers is %d" % len(regularizable_layers)
+        print "num of regularizable layers is %d" % len(regularizable_layers)
 
         train_prediction = lasagne.layers.get_output(self.network, self.x, deterministic=False)
         loss_train = lasagne.objectives.aggregate(lasagne.objectives.categorical_crossentropy(train_prediction, self.y),

@@ -157,3 +157,20 @@ amazon full:
 [CV] .......... clf__C=1.0, clf__solver=lbfgs, score=0.738417 -42.4min
 [CV] ...... clf__C=1.0, clf__solver=newton-cg, score=0.739802 -52.6min
 [CV] ...... clf__C=1.0, clf__solver=newton-cg, score=0.734168 -56.0min
+
+
+
+==========amazon_1000000===========
+dataset name: /home/igoltsman/hdfs/preprocessed_data/amazon_1000000
+classifier name: LogisticRegression
+best params:
+{'clf__C': 1.7999999999999998, 'clf__solver': 'lbfgs'}
+best score = 0.743014
+--- 23715.153753 seconds --
+
+dataset name: /home/igoltsman/hdfs/preprocessed_data/amazon_1000000
+classifier name: MultinomialNB
+best params:
+{'clf__fit_prior': True, 'clf__alpha': 0.10000000000000001}
+best score = 0.671529
+--- 3059.67851782 seconds ---

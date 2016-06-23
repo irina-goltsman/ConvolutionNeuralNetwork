@@ -25,16 +25,24 @@ def load_and_print_params(path_to_model):
     print clf.get_all_weights_values()
 
 
-def continue_training(path_to_model, data_file, early_stop, valid_frequency, n_epochs):
+def continue_training(path_to_model, data_file, early_stop, valid_frequency, n_epochs, big_dataset):
     print "loading data...",
     x = cPickle.load(open(data_file, "rb"))
-    data, w2v_matrix, word_idx_map, vocab = x[0], x[1], x[2], x[3]
+    try:
+        data, w2v_matrix, word_idx_map, vocab = x[0], x[1], x[2], x[3]
+    except IndexError:
+        data, word_idx_map = x[0], x[1]
     print "data loaded!"
     print "%d samples." % len(data)
 
-    max_l = max(data["text"].apply(dt.words_count))
+    data["counts"] = data["text"].apply(dt.words_count)
+    if big_dataset:
+        max_l = data["counts"].quantile(0.95)
+        print "text's 0.95 quantile = %d words" % max_l
+    else:
+        max_l = max(data["counts"])
     print "max length of text = %d words" % max_l
-    data = dt.add_idx_features(data, word_idx_map, max_l=max_l, filter_h=5)
+    dt.add_idx_features(data, word_idx_map, max_l=max_l, filter_h=5)
     print data["idx_features"][0]
 
     assert dt.check_all_sentences_have_one_dim(data["idx_features"])
@@ -214,7 +222,7 @@ def test_on_binary_sentiment(data_path, clf_name, n_epochs, batch_size, non_stat
                 early_stop=early_stop, valid_frequency=valid_frequency,
                 n_epochs=n_epochs, update_function=update_finction)
     except:
-        # save_model(clf)
+        save_model(clf)
         raise
     save_model(clf)
 
@@ -240,9 +248,9 @@ if __name__ == "__main__":
 
     print("--- %s seconds ---" % (time.time() - start_time))
 
-    max_size = None
+    max_size = 1000000
     model_name = None
-    dataset_name = "20_news"
+    dataset_name = "amazon"
     # train_and_save_model(clf_name='dcnn', data_file=dt.get_output_name(dataset_name, model_name),
     #                      n_epochs=40, batch_size=50, non_static=True, early_stop=False,
     #                      k_top=4, n_filters=(20, 20), windows=((7,), (5,)), seed=0, word_dimentions=40,
@@ -250,16 +258,16 @@ if __name__ == "__main__":
     #                      L1_regs=(0.00001, 0.00003, 0.000003, 0.0001), n_hidden=100)
     # #
     train_and_save_model(clf_name='1cnn', data_file=dt.get_output_name(dataset_name, model_name, max_size),
-                         n_epochs=3, batch_size=50, non_static=True, early_stop=True, valid_frequency=20,
+                         n_epochs=15, batch_size=50, non_static=True, early_stop=True, valid_frequency=20,
                          k_top=1, n_filters=(100,), windows=((3, 4),), seed=0, update_finction=adam,
                          word_dimentions=40, activations=('relu',), dropout=0.2,
                          l1_regs=(0.00001, 0.00001, 0.00001, 0.0001, 0.0001), n_hidden=100,
                          big_dataset=True)
 
     # load_and_print_params("./cnn_states/state_2016-06-12-19:53:52")
-    # continue_training(path_to_model="./cnn_states/state_2016-06-18-20:03:13",
-    #                   data_file=dt.get_output_name(dataset_name, model_name),
-    #                   early_stop=False, valid_frequency=5, n_epochs=50)
+    # continue_training(path_to_model="./cnn_states/state_2016-06-23-03:55:19",
+    #                   data_file=dt.get_output_name(dataset_name, model_name, max_size),
+    #                   early_stop=False, valid_frequency=20, n_epochs=50, big_dataset=True)
     # look_at_vec_map(data_file=get_output_name(dataset_name, model_name))
 
     print("--- %s seconds ---" % (time.time() - start_time))

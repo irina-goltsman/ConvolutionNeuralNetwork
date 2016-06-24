@@ -207,6 +207,7 @@ def test_on_binary_sentiment(data_path, clf_name, n_epochs, batch_size, non_stat
                                                                         data_path + "test_lbl.txt")
 
     assert dt.check_all_sentences_have_one_dim(x_train_ids)
+    print x_train_ids[0]
     sentence_len = len(x_train_ids[1])
     n_out = max(y_train)+1
     clf = CNNTextClassifier(clf_name=clf_name, vocab_size=15449, word_embedding=None,
@@ -233,16 +234,16 @@ big_dataset = {'polarity': False, 'mr_kaggle': True,
 
 if __name__ == "__main__":
     start_time = time.time()
-
-    test_on_binary_sentiment(data_path='./data/binarySentiment/', clf_name='dcnn',
-                             n_epochs=50, batch_size=4, non_static=True, early_stop=False,
-                             k_top=4, n_filters=(6, 14), windows=((7,), (5,)), seed=0, word_dimentions=48,
-                             activations=('tanh', 'tanh'), dropout=0.5, valid_frequency=20,
-                             l2_regs=(0.0001 / 2, 0.00003 / 2, 0.000003 / 2, 0.0001 / 2),
-                             update_finction=adadelta)
+    #
+    # test_on_binary_sentiment(data_path='./data/binarySentiment/', clf_name='dcnn',
+    #                          n_epochs=50, batch_size=4, non_static=True, early_stop=False,
+    #                          k_top=4, n_filters=(10, 14), windows=((4,), (3,)), seed=0, word_dimentions=48,
+    #                          activations=('tanh', 'tanh'), dropout=0.5, valid_frequency=20,
+    #                          l2_regs=(0.0001 / 2, 0.00003 / 2, 0.000003 / 2, 0.0001 / 2),
+    #                          update_finction=adadelta)
 
     # test_on_binary_sentiment(data_path='./data/binarySentiment/', clf_name='1cnn',
-    #                          n_epochs=100, batch_size=50, non_static=True, early_stop=True, valid_frequency=50,
+    #                          n_epochs=100, batch_size=50, non_static=True, early_stop=True, valid_frequency=10,
     #                          k_top=1, n_filters=(100,), windows=((3, 4),), seed=0,
     #                          word_dimentions=30, activations=('relu',), dropout=0.2,
     #                          l1_regs=(0.00001, 0.00003, 0.000003, 0.0001),
@@ -251,11 +252,11 @@ if __name__ == "__main__":
     print("--- %s seconds ---" % (time.time() - start_time))
 
     max_size = None
-    model_name = None
-    dataset_name = "mr_kaggle"
+    model_name = "google_300"
+    dataset_name = "twitter"
     train_and_save_model(clf_name='dcnn', data_file=dt.get_output_name(dataset_name, model_name),
                          n_epochs=40, batch_size=4, non_static=True, early_stop=False,
-                         k_top=4, n_filters=(6, 14), windows=((7,), (5,)), seed=0, word_dimentions=40,
+                         k_top=4, n_filters=(6, 14), windows=((7,), (5,)), seed=0, word_dimentions=None,
                          activations=('tanh', 'tanh'), dropout=0.5, valid_frequency=20,
                          l2_regs=(0.00001, 0.00003, 0.000003, 0.0001), n_hidden=100, l1_regs=list(),
                          big_dataset=big_dataset[dataset_name], update_finction=adadelta)

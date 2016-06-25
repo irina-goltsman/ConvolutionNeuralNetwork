@@ -20,8 +20,8 @@ def parse_activation(name):
         raise NotImplementedError
 
 
-def build_new_cnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, word_embedding,
-                  non_static, windows, n_filters, activations, k_top, dropout, n_out):
+def build_lstm(input_var, batch_size, sentence_len, vocab_size, word_dimension, word_embedding,
+               non_static, windows, n_filters, activations, k_top, dropout, n_out):
     l_in = lasagne.layers.InputLayer(
         shape=(batch_size, sentence_len),
         input_var=input_var
@@ -35,13 +35,49 @@ def build_new_cnn(input_var, batch_size, sentence_len, vocab_size, word_dimensio
         non_static=non_static
     )
 
-    l_conv = lasagne.layers.conv.Conv2DLayer(
-        l_embedding,
-        n_filters[0],
-        b=b1,
-        filter_size=(window, word_dimension),
-        nonlinearity=parse_activation(activations[0])
+    l_lstm = lasagne.layers.LSTMLayer(l_embedding, num_units=100)
+
+    l_dropout2 = lasagne.layers.DropoutLayer(l_lstm, p=dropout)
+
+    l_out = lasagne.layers.DenseLayer(
+        l_dropout2,
+        num_units=n_out,
+        nonlinearity=lasagne.nonlinearities.softmax
     )
+    return l_out
+
+
+def build_gru(input_var, batch_size, sentence_len, vocab_size, word_dimension, word_embedding,
+               non_static, windows, n_filters, activations, k_top, dropout, n_out):
+    l_in = lasagne.layers.InputLayer(
+        shape=(batch_size, sentence_len),
+        input_var=input_var
+    )
+
+    l_embedding = CNN.embeddings.SentenceEmbeddingLayer(
+        l_in,
+        vocab_size=vocab_size,
+        word_dimension=word_dimension,
+        word_embedding=word_embedding,
+        non_static=non_static
+    )
+
+    l_lstm = lasagne.layers.GRULayer(l_embedding, num_units=100)
+
+    l_dropout2 = lasagne.layers.DropoutLayer(l_lstm, p=dropout)
+
+    l_dense = lasagne.layers.DenseLayer(
+        l_dropout2,
+        num_units=n_out,
+        nonlinearity=lasagne.nonlinearities.sigmoid
+    )
+
+    l_out = lasagne.layers.DenseLayer(
+        l_dense,
+        num_units=n_out,
+        nonlinearity=lasagne.nonlinearities.softmax
+    )
+    return l_out
 
 
 def build_1cnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, word_embedding,
@@ -137,7 +173,7 @@ def build_dcnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, 
         n_filters[1],
         filter_hight=windows[1][0],
         nonlinearity=lasagne.nonlinearities.linear,
-        # border_mode = "full"
+        border_mode = "full"
     )
     l_fold2 = CNN.folding.FoldingLayer(l_conv2)
     l_pool2 = CNN.pooling.KMaxPoolLayer(l_fold2, k=k_top)

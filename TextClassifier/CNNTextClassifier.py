@@ -16,32 +16,16 @@ from lasagne.random import set_rng
 theano.config.exception_verbosity = 'high'
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-#TODO: юзать больше карт: from 100 to 600
 #TODO: заюзать glove вместо/вместе word2vec
 
-#TODO: в датасете MR бывают совсем длинные тексты, возможно выравнивание по длине - не лучшая идея
 # mode=NanGuardMode - для дебага нанов, поняла что [nvcc] fastmath=True - вызывает nan!
 
 # TODO: ================================6 подумать над реализацией character-level сети - 30мин
 # TODO: ================================сделать character-level сеть - 2ч ( переоценить время после пункта 6 )
-# TODO: 1cnn на 20news - чисто эмпирически (макс 3 эпохи) - 30мин - 1.5ч - ПРОБЛЕМА, max_sent_length = 52171
 
-# TODO: 20_news имеет слишком большой разброс в длине текста, нормально ли просто отрубать часть?
-
-# На хадупе от яндекса нет gensim и lasagne - хотя с первой проблемо ещё можно справиться... load_bin_vec
-
-# TODO: обучить 1cnn и dcnn на предобработанном Kalchbrenner датасете, сравнить качество dcnn
-# TODO: если качество dcnn хуже - пошаманить над параметрами
-# TODO: можно не фиксировать длину предложения, но при этом упорядочить по длине
-# TODO: если предложение короткое и режим non_static, и при этом не указана реальная длина,
-# то нулевые вектора перестают быть нулевыми - разве это нормально? Добавь зануление padding вектора
-# TODO: используя twitter датасет настроить параметры dcnn
 # TODO: передавать вместе с датасетом реальную длину предложения и заменить k-max-pooling на dynamic k-max-pooling
-# TODO: обучить рекурентную сеточку???
-# TODO: собрать свою модель
 # TODO: распарсить dbpedia, проверить на бейзлайнах
 
-# TODO: при превращении текстов в набор int запоминать реальную длину и передавать её в функцию обучения
 class CNNTextClassifier(BaseEstimator):
     def __init__(self, clf_name='1cnn', vocab_size=None, word_dimension=100, word_embedding=None, non_static=True,
                  batch_size=100, sentence_len=None, n_out=2, k_top=1, seed=0,
@@ -110,7 +94,7 @@ class CNNTextClassifier(BaseEstimator):
 
     @staticmethod
     def get_clf_builder(name):
-        clf_builder_dict = {'1cnn': build_1cnn, 'dcnn': build_dcnn}
+        clf_builder_dict = {'1cnn': build_1cnn, 'dcnn': build_dcnn, 'lstm': build_lstm}
         try:
             builder = clf_builder_dict[name]
         except KeyError:
@@ -256,7 +240,6 @@ class CNNTextClassifier(BaseEstimator):
         ind_train = permutation[test_size:]
         if not shuffle:
             ind_test = ind_test.sort()
-            ind_train = ind_train.sort()
         if lengths is not None:
             train_lengths = lengths[ind_train]
             test_lengths = lengths[ind_test]

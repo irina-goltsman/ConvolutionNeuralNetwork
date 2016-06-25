@@ -93,6 +93,8 @@ def examine_dataset(data_path, load_function, max_size):
     print "cleaning finished"
     print "example of cleared data: " + data["cleared_text"][1]
     vocabulary = dt.build_full_dict(data["cleared_text"])
+    print "last 10 values of vocabulary dict:"
+    print vocabulary.items()
     word_idx_map = dt.build_word_idx_map(vocabulary)
     print "vocab size: " + str(len(vocabulary))
     print "max vocabulary value: %d" % max(word_idx_map.values())
@@ -130,10 +132,10 @@ loaders = {"twitter": load_twitter_data,
 # --output_path=../../hdfs/preprocessed_data/twitter_google_300
 if __name__ == "__main__":
     max_size = None
-    model_name = None
+    model_name = 'google_300'
     parser = argparse.ArgumentParser(description='Preprocess given dataset.')
     parser.add_argument("--max_size", type=int, default=max_size, help='Max number of rows should be processed.')
-    parser.add_argument("--dataset_name", type=str, default="amazon", help='Dataset short name.')
+    parser.add_argument("--dataset_name", type=str, default="polarity", help='Dataset short name.')
     parser.add_argument("--model_path", type=str, default=models[model_name] if model_name is not None else None,
                         help='Path to word embedding model.')
     parser.add_argument("--data_path", type=str, default=None, help='Path to dataset.')

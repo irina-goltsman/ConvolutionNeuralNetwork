@@ -50,12 +50,51 @@ train_and_save_model(clf_name='1cnn', data_file=dt.get_output_name(dataset_name,
 global_iter 860, epoch 2, batch 410, mean train cost = 0.392985
 ------------valid score: 0.892000------------
 
+clf_name = dcnn
+vocab_size = 82404
+word_dimension = 40
+non_static = True
+sentence_len = 689
+n_out = 2
+windows = ((7,), (5,))
+n_filters = (6, 14)
+n_hidden = 100
+k_top = 4
+activation = ('tanh', 'tanh')
+dropout = 0.500000
+l1_regs = []
+l2_regs = (1e-05, 3e-05, 3e-06, 0.0001)
+batch_size = 20
+seed = 0
+
+global_iter 3660, epoch 4, batch 285, mean train cost = 0.087630
+------------valid score: 0.884800------------
+
+
+
+AWS
+Saving state to './cnn_states/state_2016-06-23-20:54:00'...
+
+lstm 100 + LR
+Epoch 1 finished. Training time: 168.44 secs
+Train score = 0.940800. Valid score = 0.832800.
+
+Epoch 2 finished. Training time: 164.34 secs
+Train score = 0.996089. Valid score = 0.857200.
+
 ==========20_news=============
 dataset name: ./prepocessed_data/20_news
 classifier name: MultinomialNB
 best params:
 {'clf__fit_prior': False, 'clf__alpha': 0.10000000000000001}
 best score = 0.732039
+
+dataset name: ./preprocessed_data/20_news
+classifier name: LogisticRegression
+best params:
+{'clf__C': 5.0, 'clf__solver': 'newton-cg'}
+best score = 0.762442
+--- 11038.2728481 seconds ---
 
 20_news
 clf__penalty=elasticnet, clf__loss=hinge, clf__fit_intercept=True, clf__alpha=2e-05, score=0.7692
@@ -71,6 +110,37 @@ best params:
 {'clf__penalty': 'l2', 'clf__loss': 'hinge', 'clf__alpha': 5.0000000000000002e-05}
 best score = 0.776648
 test score = 0.710967
+
+dcnn
+clf_name = dcnn
+vocab_size = 140842
+word_dimension = 40
+non_static = True
+sentence_len = 680
+n_out = 20
+windows = ((7,), (5,))
+n_filters = (6, 14)
+n_hidden = 100
+k_top = 4
+activation = ('tanh', 'tanh')
+dropout = 0.500000
+l1_regs = []
+l2_regs = (1e-05, 3e-05, 3e-06, 0.0001)
+batch_size = 20
+seed = 0
+
+global_iter 1740, epoch 3, batch 42, mean train cost = 1.026645
+------------valid score: 0.554255------------
+global_iter 2740, epoch 4, batch 193, mean train cost = 0.498715
+------------valid score: 0.582447------------
+global_iter 14840, epoch 18, batch 407, mean train cost = 0.163678
+------------valid score: 0.593085------------
+
+
+lstm, 100units:
+global_iter 2360, epoch 7, batch 320, mean train cost = 0.377156
+------------valid score: 0.503784------------
+
 ==========twitter=============
 dataset name: ../../hdfs/preprocessed_data/twitter
 classifier name: MultinomialNB
@@ -97,6 +167,9 @@ best score = 0.813469
 tweets 200000 1cnn
 Epoch 1 finished. Training time: 978.14 secs
 Train score = 0.808994. Valid score = 0.756800.
+
+dcnn
+
 
 ==========bin_sent=============
 clf_name = dcnn
@@ -231,3 +304,24 @@ global_iter 12500, epoch 1, batch 12500, mean train cost = 0.782860
 ------------valid score: 0.747140------------
 global_iter 12940, epoch 1, batch 12940, mean train cost = 0.825887
 ------------valid score: 0.747410------------
+
+============imdb===============
+('Train ', 0.017642105263157903, 'Valid ', 0.095999999999999974, 'Test ', 0.16000000000000003)
+===============================
+hadoop:
+model options {'encoder': 'lstm', 'optimizer': <function adadelta at 0x7fe613d1a1b8>, 'validFreq': 700,
+'lrate': 0.0001, 'batch_size': 16, 'decay_c': 0.0, 'patience': 10, 'reload_model': None, 'n_words': 100000,
+'max_epochs': 100, 'dispFreq': 10, 'dataset': 'amazon', 'valid_batch_size': 64, 'use_dropout': True,
+'dim_proj': 128, 'maxlen': 182, 'saveto': None, 'noise_std': 0.0, 'test_size': -1, 'saveFreq': 10}
+
+this laptop:
+model options {'encoder': 'lstm', 'optimizer': <function adadelta at 0x7fcc574ba1b8>, 'validFreq': 700,
+'lrate': 0.0001, 'batch_size': 16, 'decay_c': 0.0, 'patience': 10, 'reload_model': None, 'n_words': 50000,
+'max_epochs': 100, 'dispFreq': 10, 'dataset': 'twitter', 'valid_batch_size': 64, 'use_dropout': True,
+'dim_proj': 128, 'maxlen': None, 'saveto': None, 'noise_std': 0.0, 'test_size': -1, 'saveFreq': 10}
+
+AWS:
+model options {'encoder': 'lstm', 'optimizer': <function adadelta at 0x7faee26e0230>, 'validFreq': 700,
+'lrate': 0.0001, 'batch_size': 16, 'decay_c': 0.0, 'patience': 10, 'reload_model': None, 'n_words': 100000,
+'max_epochs': 100, 'dispFreq': 10, 'dataset': '20_news', 'valid_batch_size': 64, 'use_dropout': True,
+'dim_proj': 128, 'maxlen': None, 'saveto': None, 'noise_std': 0.0, 'test_size': 628, 'saveFreq': 10}

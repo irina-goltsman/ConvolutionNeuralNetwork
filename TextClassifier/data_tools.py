@@ -219,7 +219,8 @@ def preprocess_dataset(data_path, load_function, output="prepared_data", model_p
     if model_path is None:
         # TODO: обрезать словарь? выкидывать стоп-слова?
         word_idx_map = build_word_idx_map(vocabulary)
-        cPickle.dump([data, word_idx_map], open(output, "wb"))
+        with open(output, "wb") as f:
+            cPickle.dump([data, word_idx_map], f)
         print "dataset without embedding model preprocessed and saved as '%s'" % output
         print("--- %s seconds ---" % (time.time() - start_time))
         return

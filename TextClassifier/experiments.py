@@ -138,8 +138,12 @@ def save_model(clf):
 def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, k_top, n_filters,
                          windows, activations, early_stop, valid_frequency, seed, big_dataset,
                          word_dimentions, dropout, l1_regs, l2_regs, n_hidden, update_finction):
+    model_options = locals().copy()
+    print("model options", model_options)
+
     print "loading data...",
-    x = cPickle.load(open(data_file, "rb"))
+    with open(data_file, 'rb') as pickle_file:
+        x = cPickle.load(pickle_file)
     try:
         data, w2v_matrix, word_idx_map, vocab = x[0], x[1], x[2], x[3]
     except IndexError:
@@ -252,22 +256,22 @@ if __name__ == "__main__":
     print("--- %s seconds ---" % (time.time() - start_time))
 
     max_size = None
-    model_name = "google_300"
-    dataset_name = "twitter"
-    train_and_save_model(clf_name='dcnn', data_file=dt.get_output_name(dataset_name, model_name),
-                         n_epochs=40, batch_size=4, non_static=True, early_stop=False,
-                         k_top=4, n_filters=(6, 14), windows=((7,), (5,)), seed=0, word_dimentions=None,
-                         activations=('tanh', 'tanh'), dropout=0.5, valid_frequency=20,
-                         l2_regs=(0.00001, 0.00003, 0.000003, 0.0001), n_hidden=100, l1_regs=list(),
-                         big_dataset=big_dataset[dataset_name], update_finction=adadelta)
+    model_name = "mr_100"
+    dataset_name = "mr_kaggle"
+    # train_and_save_model(clf_name='dcnn', data_file=dt.get_output_name(dataset_name, model_name),
+    #                      n_epochs=40, batch_size=4, non_static=True, early_stop=False,
+    #                      k_top=4, n_filters=(6, 14), windows=((7,), (5,)), seed=0, word_dimentions=48,
+    #                      activations=('tanh', 'tanh'), dropout=0.5, valid_frequency=20,
+    #                      l2_regs=(0.00001, 0.00003, 0.000003, 0.0001), n_hidden=100, l1_regs=list(),
+    #                      big_dataset=big_dataset[dataset_name], update_finction=adadelta)
     #
-    # train_and_save_model(clf_name='1cnn', data_file=dt.get_output_name(dataset_name, model_name, max_size),
-    #                      n_epochs=15, batch_size=50, non_static=True, early_stop=True, valid_frequency=40,
-    #                      k_top=1, n_filters=(100,), windows=((3, 4, 5),), seed=0, update_finction=adam,
-    #                      word_dimentions=None, activations=('relu',), dropout=0.5,
-    #                      l2_regs=(0, 0.00005, 0.00005, 0.00005, 0.00005),
-    #                      l1_regs=(0, 0.0001, 0.0001, 0.0001, 0.0001), n_hidden=100,
-    #                      big_dataset=big_dataset[dataset_name])
+    train_and_save_model(clf_name='lstm', data_file=dt.get_output_name(dataset_name, model_name, max_size),
+                         n_epochs=15, batch_size=50, non_static=True, early_stop=False, valid_frequency=40,
+                         k_top=1, n_filters=(100,), windows=((3, 4,),), seed=0, update_finction=adam,
+                         word_dimentions=None, activations=('relu',), dropout=0.5,
+                         l2_regs=list(),
+                         l1_regs=list(), n_hidden=100,
+                         big_dataset=big_dataset[dataset_name])
 
     # load_and_print_params("./cnn_states/state_2016-06-12-19:53:52")
     # continue_training(path_to_model="./cnn_states/state_2016-06-23-03:55:19",

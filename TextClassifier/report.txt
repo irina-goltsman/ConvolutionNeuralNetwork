@@ -78,9 +78,20 @@ Saving state to './cnn_states/state_2016-06-23-20:54:00'...
 lstm 100 + LR
 Epoch 1 finished. Training time: 168.44 secs
 Train score = 0.940800. Valid score = 0.832800.
-
 Epoch 2 finished. Training time: 164.34 secs
 Train score = 0.996089. Valid score = 0.857200.
+Epoch 3 finished. Training time: 171.05 secs
+Train score = 0.999778. Valid score = 0.855200.
+Epoch 4 finished. Training time: 171.15 secs
+Train score = 1.000000. Valid score = 0.859600.
+
+global_iter 3720, epoch 9, batch 120, mean train cost = 0.000392
+------------valid score: 0.862000------------
+
+gru + LR
+Epoch 1 finished. Training time: 136.58 secs
+Train score = 0.939511. Valid score = 0.832400.
+
 
 ==========20_news=============
 dataset name: ./prepocessed_data/20_news
@@ -168,8 +179,7 @@ tweets 200000 1cnn
 Epoch 1 finished. Training time: 978.14 secs
 Train score = 0.808994. Valid score = 0.756800.
 
-dcnn
-
+lstm word_dim = 50
 
 ==========bin_sent=============
 clf_name = dcnn

@@ -94,7 +94,7 @@ class CNNTextClassifier(BaseEstimator):
 
     @staticmethod
     def get_clf_builder(name):
-        clf_builder_dict = {'1cnn': build_1cnn, 'dcnn': build_dcnn, 'lstm': build_lstm}
+        clf_builder_dict = {'1cnn': build_1cnn, 'dcnn': build_dcnn, 'lstm': build_lstm, 'gru': build_gru}
         try:
             builder = clf_builder_dict[name]
         except KeyError:
@@ -142,6 +142,8 @@ class CNNTextClassifier(BaseEstimator):
             if isinstance(layer, (
                                   CNN.embeddings.SentenceEmbeddingLayer,
                                   CNN.Conv1DLayerSplitted,
+                                  lasagne.layers.LSTMLayer,
+                                  lasagne.layers.GRULayer,
                                   lasagne.layers.conv.Conv2DLayer,
                                   lasagne.layers.DenseLayer)):
                 regularizable_layers.append(layer)
@@ -331,7 +333,7 @@ class CNNTextClassifier(BaseEstimator):
             self.load(model_path)
 
         epoch = 0
-        best_valid_score, best_iter_num, last_test_score = 0, 0, 0
+        self.best_valid_score, self.best_iter_num, self.last_test_score = 0, 0, 0
         # early-stopping parameters
         valid_frequency = min(valid_frequency, num_train_batches - 1)
         print "visualization frequency: %d batches" % valid_frequency
@@ -339,6 +341,7 @@ class CNNTextClassifier(BaseEstimator):
         patience_increase = 2.0  # wait this much longer when a new best is found
         improvement_threshold = 0.995  # a relative improvement of this much is
         stop = False
+        self.history_results = list()
         while (epoch < n_epochs) and (not stop):
             start_time = time.time()
             epoch += 1
@@ -359,16 +362,16 @@ class CNNTextClassifier(BaseEstimator):
                     print "------------valid score: %f------------" \
                           % (float(valid_score))
 
-                    if early_stop and (valid_score > improvement_threshold * best_valid_score):
+                    if early_stop and (valid_score > improvement_threshold * self.best_valid_score):
                         patience = max(patience, iter * patience_increase)
                         print "new patience = %d" % patience
 
-                    if valid_score > best_valid_score:
-                        best_valid_score = valid_score
-                        best_iter_num = iter
+                    if valid_score > self.best_valid_score:
+                        self.best_valid_score = valid_score
+                        self.best_iter_num = iter
                         if x_test is not None:
-                            last_test_score = self.score(x_test, y_test, test_lens)
-                            print "Test score = %f." % last_test_score
+                            self.last_test_score = self.score(x_test, y_test, test_lens)
+                            print "Test score = %f." % self.last_test_score
 
                     # TODO: адекватно ли прерываться на середине эпохи?
                     if early_stop and (patience < iter):
@@ -376,24 +379,25 @@ class CNNTextClassifier(BaseEstimator):
                         print "patience = %d" % patience
                         print "iter = %d" % iter
                         stop = True
-                        break
+
+                    self.history_results.append([valid_score, train_cost])
             # Конец эпохи:
             train_score = self.score(x_train, y_train, train_lens)
             valid_score =  self.score(x_valid, y_valid, valid_lens)
-            if valid_score > best_valid_score:
-                best_valid_score = valid_score
-                best_iter_num = epoch * num_train_batches - 1
+            if valid_score > self.best_valid_score:
+                self.best_valid_score = valid_score
+                self.best_iter_num = epoch * num_train_batches - 1
                 if x_test is not None:
-                    last_test_score = self.score(x_test, y_test, test_lens)
+                    self.last_test_score = self.score(x_test, y_test, test_lens)
             print "Epoch %d finished. Training time: %.2f secs" % (epoch, time.time()-start_time)
             print "Train score = %f. Valid score = %f." % (train_score, valid_score)
             if x_test is not None:
-                print "Last test score = %f." % last_test_score
+                print "Last test score = %f." % self.last_test_score
         print "OPTIMIZATION COMPLETE."
-        print "Best valid score: %f" % best_valid_score
-        print "Best iter num: %d, best epoch: %d" % (best_iter_num, best_iter_num // num_train_batches + 1)
+        print "Best valid score: %f" % self.best_valid_score
+        print "Best iter num: %d, best epoch: %d" % (self.best_iter_num, self.best_iter_num // num_train_batches + 1)
         if x_test is not None:
-            print "Test score of best iter num: %f" % last_test_score
+            print "Test score of best iter num: %f" % self.last_test_score
 
     def predict(self, data, lengths=None):
         """

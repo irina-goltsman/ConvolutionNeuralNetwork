@@ -137,7 +137,7 @@ def save_model(clf):
 
 def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, k_top, n_filters,
                          windows, activations, early_stop, valid_frequency, seed, big_dataset,
-                         word_dimentions, dropout, l1_regs, l2_regs, n_hidden, update_finction):
+                         word_dimentions, dropout, l1_regs, l2_regs, n_hidden, update_function):
     model_options = locals().copy()
     print("model options", model_options)
 
@@ -191,9 +191,16 @@ def train_and_save_model(clf_name, data_file, n_epochs, non_static, batch_size, 
 
     try:
         clf.fit(data["idx_features"], data["label"], early_stop=early_stop, valid_frequency=valid_frequency,
-                n_epochs=n_epochs, update_function=update_finction)
+                n_epochs=n_epochs, update_function=update_function)
     except:
-        # save_model(clf)
+        print "best_valid_score: %f, clf.best_iter_num:%f, clf.last_test_score:%f" %\
+              (clf.best_valid_score, clf.best_iter_num, clf.last_test_score)
+        new_res_path = '_'.join(("./results/res", dataset_name, clf_name,
+                                datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')))
+        results = np.asarray(clf.history_results)
+        best = np.array([clf.best_valid_score, clf.best_iter_num, clf.last_test_score])
+        np.savez(new_res_path, model_options, best, results)
+        save_model(clf)
         raise
     save_model(clf)
 
@@ -256,8 +263,8 @@ if __name__ == "__main__":
     print("--- %s seconds ---" % (time.time() - start_time))
 
     max_size = None
-    model_name = "mr_100"
-    dataset_name = "mr_kaggle"
+    model_name = None
+    dataset_name = "twitter"
     # train_and_save_model(clf_name='dcnn', data_file=dt.get_output_name(dataset_name, model_name),
     #                      n_epochs=40, batch_size=4, non_static=True, early_stop=False,
     #                      k_top=4, n_filters=(6, 14), windows=((7,), (5,)), seed=0, word_dimentions=48,
@@ -265,10 +272,10 @@ if __name__ == "__main__":
     #                      l2_regs=(0.00001, 0.00003, 0.000003, 0.0001), n_hidden=100, l1_regs=list(),
     #                      big_dataset=big_dataset[dataset_name], update_finction=adadelta)
     #
-    train_and_save_model(clf_name='lstm', data_file=dt.get_output_name(dataset_name, model_name, max_size),
-                         n_epochs=15, batch_size=50, non_static=True, early_stop=False, valid_frequency=40,
-                         k_top=1, n_filters=(100,), windows=((3, 4,),), seed=0, update_finction=adam,
-                         word_dimentions=None, activations=('relu',), dropout=0.5,
+    train_and_save_model(clf_name='gru', data_file=dt.get_output_name(dataset_name, model_name, max_size),
+                         n_epochs=15, batch_size=50, non_static=True, early_stop=False, valid_frequency=50,
+                         k_top=1, n_filters=(100,), windows=((3, 4,),), seed=0, update_function=adam,
+                         word_dimentions=50, activations=('relu',), dropout=0.5,
                          l2_regs=list(),
                          l1_regs=list(), n_hidden=100,
                          big_dataset=big_dataset[dataset_name])

@@ -75,8 +75,25 @@ def load_amazon(data_path, max_size=None):
 
 # TODO:
 def load_dbpedia_data(data_path, max_size=None):
-    data = pd.read_csv(data_path, sep=',', nrows=max_size, usecols=[2])[4:]
-    print data
+    limit = 100000
+    if max_size is None:
+        max_size = limit
+    classes = ('ArchitecturalStructure', 'ChemicalSubstance', 'Event', 'MeanOfTransportation',
+               'NaturalPlace', 'Organisation', 'Artist', 'Athlete', 'Species', 'Work')
+    dataset = []
+    shift = 4
+    for id, class_name in enumerate(classes):
+        path = data_path + class_name + '.csv'
+        # TODO: возможно стоило перемешать и брать случайные из класса.
+        data = pd.read_csv(path, sep=',', nrows=max_size/len(classes) * 2 + shift, usecols=[2],
+                           na_values='NULL')[shift:]
+        data.dropna(inplace=True)
+        data = data[0:max_size/len(classes)]
+        print len(data)
+        data.columns = ["text",]
+        data['label'] = id
+        dataset.append(data)
+    return pd.concat(dataset, ignore_index=True)
 
 
 def examine_dataset(data_path, load_function, max_size):
@@ -94,10 +111,10 @@ def examine_dataset(data_path, load_function, max_size):
     print "example of cleared data: " + data["cleared_text"][1]
     vocabulary = dt.build_full_dict(data["cleared_text"])
     print "last 10 values of vocabulary dict:"
-    print vocabulary.items()
+    print vocabulary.items()[-10:]
     word_idx_map = dt.build_word_idx_map(vocabulary)
     print "vocab size: " + str(len(vocabulary))
-    print "max vocabulary value: %d" % max(word_idx_map.values())
+    # print "max vocabulary value: %d" % max(word_idx_map.values())
 
     data["length"] = data["text"].apply(dt.words_count)
     data["cleared_length"] = data["cleared_text"].apply(dt.words_count)
@@ -106,7 +123,8 @@ def examine_dataset(data_path, load_function, max_size):
     print "max length of cleared text = %d words" % max(data['cleared_length'])
     print "min lenght of cleared text = %d words" % min(data['cleared_length'])
     print data.describe(percentiles=[.25, .5, .75, .8, .9, .95, .99])
-
+    print "example of shortest text:"
+    print data.sort_values(by="length")
 
 models = {"mr_100": "./models/100features_40minwords_10context",
           "google_300": "./models/GoogleNews-vectors-negative300.bin"}
@@ -115,7 +133,7 @@ data_files = {"twitter": "./data/tweets/Sentiment Analysis Dataset.csv",
               "mr_kaggle": "./data/MR_kaggle/labeledTrainData.tsv",
               "polarity": "./data/rt-polaritydata/",
               "20_news": None,
-              "dbpedia": "./data/DBpedia/Satellite.csv",
+              "dbpedia": "./data/DBpedia/",
               "bin_sent": "./data/binarySentiment/",
               "amazon": "./data/amazon/reviews_Beauty.json"}
 
@@ -131,16 +149,16 @@ loaders = {"twitter": load_twitter_data,
 # --model_path=../../hdfs/GoogleNews-vectors-negative300.bin
 # --output_path=../../hdfs/preprocessed_data/twitter_google_300
 if __name__ == "__main__":
-    max_size = None
-    model_name = 'google_300'
+    max_size = 100000
+    model_name = None
     parser = argparse.ArgumentParser(description='Preprocess given dataset.')
     parser.add_argument("--max_size", type=int, default=max_size, help='Max number of rows should be processed.')
-    parser.add_argument("--dataset_name", type=str, default="polarity", help='Dataset short name.')
+    parser.add_argument("--dataset_name", type=str, default="dbpedia", help='Dataset short name.')
     parser.add_argument("--model_path", type=str, default=models[model_name] if model_name is not None else None,
                         help='Path to word embedding model.')
     parser.add_argument("--data_path", type=str, default=None, help='Path to dataset.')
     parser.add_argument("--output_path", type=str, default=None, help='Full path to output file.')
-    parser.add_argument("--examine", type=bool, default=False, help='Full path to output file.')
+    parser.add_argument("--examine", type=bool, default=True, help='Full path to output file.')
     args = vars(parser.parse_args())
 
     if args['data_path'] is None:

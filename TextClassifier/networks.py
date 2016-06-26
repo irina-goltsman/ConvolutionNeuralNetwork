@@ -21,7 +21,7 @@ def parse_activation(name):
 
 
 def build_gru(input_var, batch_size, sentence_len, vocab_size, word_dimension, word_embedding,
-               non_static, windows, n_filters, activations, k_top, dropout, n_out):
+               non_static, n_out, arch_params):
     l_in = lasagne.layers.InputLayer(
         shape=(batch_size, sentence_len),
         input_var=input_var
@@ -35,9 +35,9 @@ def build_gru(input_var, batch_size, sentence_len, vocab_size, word_dimension, w
         non_static=non_static
     )
 
-    l_lstm = lasagne.layers.GRULayer(l_embedding, num_units=100)
+    l_lstm = lasagne.layers.GRULayer(l_embedding, num_units=arch_params['n_hidden'])
 
-    l_dropout2 = lasagne.layers.DropoutLayer(l_lstm, p=dropout)
+    l_dropout2 = lasagne.layers.DropoutLayer(l_lstm, p=arch_params['dropout'])
 
     l_out = lasagne.layers.DenseLayer(
         l_dropout2,
@@ -48,7 +48,7 @@ def build_gru(input_var, batch_size, sentence_len, vocab_size, word_dimension, w
 
 
 def build_lstm(input_var, batch_size, sentence_len, vocab_size, word_dimension, word_embedding,
-              non_static, windows, n_filters, activations, k_top, dropout, n_out):
+              non_static, n_out, arch_params):
 
     l_in = lasagne.layers.InputLayer(
         shape=(batch_size, sentence_len),
@@ -63,9 +63,9 @@ def build_lstm(input_var, batch_size, sentence_len, vocab_size, word_dimension, 
         non_static=non_static
     )
 
-    l_lstm = lasagne.layers.LSTMLayer(l_embedding, num_units=100)
+    l_lstm = lasagne.layers.LSTMLayer(l_embedding, num_units=arch_params['n_hidden'])
 
-    l_dropout2 = lasagne.layers.DropoutLayer(l_lstm, p=dropout)
+    l_dropout2 = lasagne.layers.DropoutLayer(l_lstm, p=arch_params['dropout'])
 
     l_out = lasagne.layers.DenseLayer(
         l_dropout2,
@@ -76,7 +76,13 @@ def build_lstm(input_var, batch_size, sentence_len, vocab_size, word_dimension, 
 
 
 def build_1cnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, word_embedding,
-               non_static, windows, n_filters, activations, k_top, dropout, n_out):
+               non_static, n_out, arch_params):
+    windows = arch_params['windows']
+    activation = arch_params['activation']
+    n_filters = arch_params['n_filters']
+    k = arch_params['k']
+    dropout = arch_params['dropout']
+
     l_in = lasagne.layers.InputLayer(
         shape=(batch_size, sentence_len),
         input_var=input_var
@@ -94,7 +100,7 @@ def build_1cnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, 
 
     layers = list()
     for window in windows[0]:
-        if activations[0] == 'iden':
+        if activation == 'iden':
             b1, b2 = None, lasagne.init.Constant(0.)
         else:
             b1, b2 = lasagne.init.Constant(0.), None
@@ -104,11 +110,11 @@ def build_1cnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, 
             n_filters[0],
             b=b1,
             filter_size=(window, word_dimension),
-            nonlinearity=parse_activation(activations[0]),
+            nonlinearity=parse_activation(activation),
             # pad="full"
         )
         # Для фильтров разной ширины тут оставляем ровно k максимальных значений
-        l_pool = CNN.pooling.KMaxPoolLayer(l_conv, k=k_top)
+        l_pool = CNN.pooling.KMaxPoolLayer(l_conv, k=k)
         l_conv_out = lasagne.layers.BiasLayer(l_pool, b=b2)
         layers.append(l_conv_out)
 
@@ -125,7 +131,14 @@ def build_1cnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, 
 
 
 def build_dcnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, word_embedding,
-               non_static, windows, n_filters, activations, k_top, dropout, n_out):
+               non_static, n_out, arch_params):
+    windows = arch_params['windows']
+    n_filters = arch_params['n_filters']
+    k = arch_params['k']
+    activations = arch_params['activations']
+    k_top = arch_params['k_top']
+    dropout = arch_params['dropout']
+
     # sentence_len может быть None
     l_in = lasagne.layers.InputLayer(
         shape=(batch_size, sentence_len),
@@ -146,19 +159,18 @@ def build_dcnn(input_var, batch_size, sentence_len, vocab_size, word_dimension, 
     l_conv1 = CNN.Conv1DLayerSplitted(
         l_embedding,
         n_filters[0],
-        filter_hight=windows[0][0],
+        filter_hight=windows[0],
         nonlinearity=lasagne.nonlinearities.linear
     )
     l_fold1 = CNN.folding.FoldingLayer(l_conv1)
     # TODO: Заменить на dynamic k-max-pooling
-    k = sentence_len / 2 if sentence_len is not None else 10
     l_pool1= CNN.pooling.KMaxPoolLayer(l_fold1, k=k)
     l_nonlinear1 = lasagne.layers.NonlinearityLayer(l_pool1, nonlinearity=parse_activation(activations[0]))
 
     l_conv2 = CNN.Conv1DLayerSplitted(
         l_nonlinear1,
         n_filters[1],
-        filter_hight=windows[1][0],
+        filter_hight=windows[1],
         nonlinearity=lasagne.nonlinearities.linear,
         border_mode = "full"
     )

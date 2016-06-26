@@ -17,22 +17,17 @@ theano.config.exception_verbosity = 'high'
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 #TODO: заюзать glove вместо/вместе word2vec
-
 # mode=NanGuardMode - для дебага нанов, поняла что [nvcc] fastmath=True - вызывает nan!
-
-# TODO: ================================6 подумать над реализацией character-level сети - 30мин
-# TODO: ================================сделать character-level сеть - 2ч ( переоценить время после пункта 6 )
-
 # TODO: передавать вместе с датасетом реальную длину предложения и заменить k-max-pooling на dynamic k-max-pooling
 # TODO: распарсить dbpedia, проверить на бейзлайнах
 
 class CNNTextClassifier(BaseEstimator):
-    def __init__(self, clf_name='1cnn', vocab_size=None, word_dimension=100, word_embedding=None, non_static=True,
-                 batch_size=100, sentence_len=None, n_out=2, k_top=1, seed=0,
-                 windows=((5, 6), (4,)), n_filters=(10, 25), n_hidden=10, activations=('tanh', 'tanh'),
-                 dropout=0.5, l1_regs = list(), l2_regs=list()):
+    def __init__(self, clf_params, architecture_params):
+        # TODO: да, я пока что не умею в **kwargs
+        # TODO: описание поправь
         """
-        :param clf_name: имя сети, доступно: '1cnn', 'dcnn'
+        Список всех возможных параметров:
+        :param clf_name: имя сети, доступно: '1cnn', 'dcnn', 'lstm', 'gru'
         :param vocab_size: размер словаря
         :param word_dimension: размерность слов
         :type word_embedding: matrix 2d or None
@@ -48,7 +43,7 @@ class CNNTextClassifier(BaseEstimator):
         :type activations: tuple of string, варианты: 'tanh', 'sigmoid', 'relu', 'cappedrelu', 'iden'
         :param activations: виды активационных функций
         :param dropout: параметр для dropout слоя
-        :param L1_regs: параметры для регуляризации
+        :param l1_regs, l2_regs: параметры для регуляризации
         :type k_top: int (>=1)
         :param k_top: параметр для итогового k-max-pooling слоя
         :param learning_rate: темп обучения
@@ -56,25 +51,12 @@ class CNNTextClassifier(BaseEstimator):
         :param seed: начальное значение для генератора случайных чисел
         """
         self._estimator_type = "classifier"
-        self.clf_name = clf_name
-        self.vocab_size = vocab_size
-        self.word_dimension = word_dimension
-        self.word_embedding = word_embedding
-        self.non_static = non_static
-        self.batch_size = batch_size
-        self.sentence_len = sentence_len
-        self.n_out = n_out
-        self.windows = windows
-        self.n_filters = n_filters
-        self.n_hidden = n_hidden
-        self.activations = activations
-        self.dropout = dropout
-        self.l1_regs = l1_regs
-        self.l2_regs = l2_regs
+        self.init_params = clf_params
+        self.arch_params = architecture_params
+
         self.is_ready = False
         self.is_ready_to_train = False
-        self.k_top = k_top
-        self.seed = seed
+
 
     @staticmethod
     def parse_activation(name):
@@ -107,17 +89,18 @@ class CNNTextClassifier(BaseEstimator):
         # Результирующие классы для каждого предложения в batch
         self.y = T.ivector('y')
 
-        self.rng = np.random.RandomState(self.seed)
+        self.rng = np.random.RandomState(self.init_params['seed'])
         set_rng(self.rng)
 
         print "CNN building..."
-        clf_builder = self.get_clf_builder(self.clf_name)
-        self.network = clf_builder(input_var=self.x, batch_size=self.batch_size,
-                                   sentence_len=self.sentence_len, vocab_size=self.vocab_size,
-                                   word_dimension=self.word_dimension, word_embedding=self.word_embedding,
-                                   non_static=self.non_static,
-                                   windows=self.windows, k_top=self.k_top, n_filters=self.n_filters,
-                                   activations=self.activations, dropout=self.dropout, n_out=self.n_out)
+        clf_builder = self.get_clf_builder(self.init_params['clf'])
+        self.network = clf_builder(input_var=self.x, batch_size=self.init_params['batch_size'],
+                                   sentence_len=self.init_params['sent_len'], vocab_size=self.init_params['vocab_size'],
+                                   word_dimension=self.init_params['word_dim'],
+                                   word_embedding=self.init_params['word_embedding'],
+                                   non_static=self.init_params['non_static'], n_out=self.init_params['n_out'],
+
+                                   arch_params=self.arch_params)
 
         # ключевое слово deterministic отключает стохастическое поведение, например, убирает dropout
         self.p_y_given_x = lasagne.layers.get_output(self.network, self.x, deterministic=True)
@@ -129,15 +112,10 @@ class CNNTextClassifier(BaseEstimator):
 
         self.is_ready = True
 
-    def ready_to_train(self, update_function, **kwargs):
-        # zero_vec_tensor = T.vector()
-        # # Если non_static, то 0ая компонента матрицы слов могла измениться, а она должна всегда быть нулевым вектором.
-        # set_zero = theano.function([zero_vec_tensor], updates=[(self.words, T.set_subtensor(self.words[0, :], zero_vec_tensor))],
-        #                            allow_input_downcast=True)
-
-        # Выпишу слои к которым должна применяться L2 регуляризация
+    def ready_to_train(self, update_function, l1_regs, l2_regs):
         print "Preparing for training..."
         regularizable_layers = []
+        # Выпишу слои к которым должна применяться регуляризация
         for layer in lasagne.layers.get_all_layers(self.network):
             if isinstance(layer, (
                                   CNN.embeddings.SentenceEmbeddingLayer,
@@ -153,13 +131,13 @@ class CNNTextClassifier(BaseEstimator):
         loss_train = lasagne.objectives.aggregate(lasagne.objectives.categorical_crossentropy(train_prediction, self.y),
                                                   mode='mean')\
                      + lasagne.regularization.regularize_layer_params_weighted(dict(zip(regularizable_layers,
-                                                                                        self.l1_regs)),
+                                                                                        l1_regs)),
                                                                                lasagne.regularization.l1)\
                      + lasagne.regularization.regularize_layer_params_weighted(dict(zip(regularizable_layers,
-                                                                                        self.l2_regs)),
+                                                                                        l2_regs)),
                                                                                lasagne.regularization.l2)
         all_params = lasagne.layers.get_all_params(self.network)
-        updates = update_function(loss_train, all_params, **kwargs)
+        updates = update_function(loss_train, all_params)
 
         self.train_model = theano.function(inputs=[self.x, self.y], outputs=loss_train, updates=updates,
                                            allow_input_downcast=True)
@@ -230,10 +208,10 @@ class CNNTextClassifier(BaseEstimator):
 # TODO: передавать window - максимальное из возможных окон свёртки
     def get_batch(self, X, id, lengths=None, window=4):
         if lengths is not None:
-            sent_len = lengths[(id + 1) * self.batch_size - 1] + window
-            return X[id * self.batch_size: (id + 1) * self.batch_size, 0:sent_len]
+            sent_len = lengths[(id + 1) * self.init_params['batch_size'] - 1] + window
+            return X[id * self.init_params['batch_size']: (id + 1) * self.init_params['batch_size'], 0:sent_len]
         else:
-            return X[id * self.batch_size: (id + 1) * self.batch_size]
+            return X[id * self.init_params['batch_size']: (id + 1) * self.init_params['batch_size']]
 
     @staticmethod
     def train_test_split(X, y, lengths, test_size, shuffle=True, rng=np.random.RandomState()):
@@ -251,10 +229,9 @@ class CNNTextClassifier(BaseEstimator):
         return X[ind_train], X[ind_test], y[ind_train], y[ind_test], train_lengths, test_lengths
 
     # TODO: разбери эту огромную функцию на маленькие читабельные части
-    def fit(self, x_train, y_train, x_valid=None, y_valid=None, x_test=None, y_test=None,
-            train_lens=None, valid_lens=None, test_lens=None,
-            model_path=None, n_epochs=5, validation_part=0.1, valid_frequency=4, early_stop=False,
-            update_function=lasagne.updates.adadelta, **kwargs):
+    def fit(self, x_train, y_train, fit_params, x_valid=None, y_valid=None, x_test=None, y_test=None,
+            train_lens=None, valid_lens=None, test_lens=None, path_to_model=None):
+        # TODO: поправь описание
         """ Fit model
         :type x_train: 2d массив из int
         :param x_train: входные данные - список из текстов
@@ -272,20 +249,17 @@ class CNNTextClassifier(BaseEstimator):
                     предложения (следует использовать для упорядоченного по возрастанию длины входа датасета)
         :type n_epochs: int
         :param n_epochs: количество эпох для обучения
-        :type validation_part: float
-        :param validation_part: доля тренеровочных данных, которые станут валидационной выборкой
+        :type valid_proportion: float
+        :param valid_proportion: доля тренеровочных данных, которые станут валидационной выборкой
                                 (если x_valid передана явно, этот параметр игнорируется)
-        :type valid_frequency: int/None
-        :param valid_frequency: если не None, то каждые visualization_frequency интераций
-                                        будет выводиться результат модели на валидационной выборке
         :type early_stop: bool
         :param early_stop: если True - будет происходить досрочная остановка.
-        :param update_function: функция обучения, по умолчанию: lasagne.updates.adadelta
-        :param **kwargs: дополнительные параметры для функции обучения
+        :param update_func: функция обучения
         """
-        assert max(y_train) < self.n_out
+        assert max(y_train) < self.init_params['n_out']
         assert min(y_train) >= 0
         assert len(x_train) == len(y_train)
+        assert len(x_train) > 0
         if train_lens is not None:
             assert len(x_train) == len(train_lens)
         if valid_lens is not None:
@@ -298,7 +272,8 @@ class CNNTextClassifier(BaseEstimator):
             self.ready()
 
         if not self.is_ready_to_train:
-            self.ready_to_train(update_function, **kwargs)
+            self.ready_to_train(fit_params['update_func'], l1_regs=fit_params['l1_regs'],
+                                l2_regs=fit_params['l2_regs'])
 
         if isinstance(x_train, Series):
             x_train = x_train.values.tolist()
@@ -307,42 +282,47 @@ class CNNTextClassifier(BaseEstimator):
             y_train = y_train.values.tolist()
             y_train = np.asarray(y_train)
 
-        x_train, y_train, train_lens = self.extend_to_batch_size(x_train, y_train, self.batch_size,
+        x_train, y_train, train_lens = self.extend_to_batch_size(x_train, y_train, self.init_params['batch_size'],
                                                                  self.rng, train_lens)
 
-        num_batches = len(x_train) / self.batch_size
-
+        num_batches = len(x_train) / self.init_params['batch_size']
         if x_valid is None or y_valid is None:
-            num_val_batches = int(np.floor(num_batches * validation_part))
+            assert fit_params['valid_proportion'] < 1
+            num_val_batches = int(np.floor(num_batches * fit_params['valid_proportion']))
             num_train_batches = num_batches - num_val_batches
             x_train, x_valid, y_train, y_valid, train_lens, valid_lens =\
                 self.train_test_split(x_train, y_train, train_lens,
-                                      test_size=num_val_batches * self.batch_size,
+                                      test_size=num_val_batches * self.init_params['batch_size'],
                                       rng=self.rng)
         else:
             num_train_batches = num_batches
 
-        assert len(x_train) % self.batch_size == 0
+        assert len(x_train) % self.init_params['batch_size'] == 0
+
+        if path_to_model is not None:
+            self.load(path_to_model)
 
         print 'x_train.shape = ' + str(x_train.shape)
         print 'x_valid.shape = ' + str(x_valid.shape)
-        # x_train, y_train = self.shared_dataset(x_train, y_train)
-        # x_valid, y_valid = self.shared_dataset(x_valid, y_valid)
-
-        if model_path is not None:
-            self.load(model_path)
 
         epoch = 0
         self.best_valid_score, self.best_iter_num, self.last_test_score = 0, 0, 0
         # early-stopping parameters
-        valid_frequency = min(valid_frequency, num_train_batches - 1)
-        print "visualization frequency: %d batches" % valid_frequency
+        valid_freq = min(fit_params['valid_freq'], num_train_batches)
+        train_score_freq = min(fit_params['train_score_freq'], num_train_batches)
+
+        print "validation frequency: %d batches" % valid_freq
+        print "train score frequency: %d batches" % train_score_freq
         patience = num_train_batches * 2  # look as this many examples regardless
         patience_increase = 2.0  # wait this much longer when a new best is found
         improvement_threshold = 0.995  # a relative improvement of this much is
         stop = False
-        self.history_results = list()
-        while (epoch < n_epochs) and (not stop):
+        self.history_val_err = list()
+        self.history_train_err = list()
+        whole_start_time = time.time()
+        start_train_time = time.time()
+        while (epoch < fit_params['n_epochs']) and (not stop):
+            print "Start epoch"
             start_time = time.time()
             epoch += 1
             train_cost = 0
@@ -353,16 +333,20 @@ class CNNTextClassifier(BaseEstimator):
                                                   self.get_batch(y_train, real_idx))
                 train_cost += cur_train_cost
 
-                if iter > 0 and iter % valid_frequency == 0:
+                if iter > 0 and iter % valid_freq == 0:
+                    print "%d texts was handled. Whole time from start: %2f secs" %\
+                          (iter * self.init_params['batch_size'], time.time() - whole_start_time)
+                    print "last %d texts was handled by %2f secs" % (valid_freq * self.init_params['batch_size'],
+                                                                time.time() - start_train_time)
                     print "global_iter %d, epoch %d, batch %d, mean train cost = %f" % \
-                          (iter, epoch, cur_idx, train_cost / valid_frequency)
+                          (iter, epoch, cur_idx, train_cost / valid_freq)
                     train_cost = 0
                     valid_score = self.score(x_valid, y_valid, valid_lens)
                     # выведу результаты валидации:
                     print "------------valid score: %f------------" \
                           % (float(valid_score))
 
-                    if early_stop and (valid_score > improvement_threshold * self.best_valid_score):
+                    if fit_params['early_stop'] and (valid_score > improvement_threshold * self.best_valid_score):
                         patience = max(patience, iter * patience_increase)
                         print "new patience = %d" % patience
 
@@ -374,23 +358,32 @@ class CNNTextClassifier(BaseEstimator):
                             print "Test score = %f." % self.last_test_score
 
                     # TODO: адекватно ли прерываться на середине эпохи?
-                    if early_stop and (patience < iter):
+                    if fit_params['early_stop'] and (patience < iter):
                         print "Early stop!"
                         print "patience = %d" % patience
                         print "iter = %d" % iter
                         stop = True
 
-                    self.history_results.append([valid_score, train_cost])
+                    if iter > 0 and iter % train_score_freq == 0:
+                        print "Train score calcs..."
+                        train_score_time = time.time()
+                        train_score = self.score(x_train, y_train, train_lens)
+                        print "Train score calcs finished by %2f secs" % (time.time() - train_score_time)
+                        print "Train score: %f." % train_score
+                        self.history_train_err.append([train_score, train_cost])
+
+                    self.history_val_err.append([valid_score, train_cost])
+                    start_train_time = time.time()
+
             # Конец эпохи:
-            train_score = self.score(x_train, y_train, train_lens)
             valid_score =  self.score(x_valid, y_valid, valid_lens)
             if valid_score > self.best_valid_score:
                 self.best_valid_score = valid_score
                 self.best_iter_num = epoch * num_train_batches - 1
                 if x_test is not None:
                     self.last_test_score = self.score(x_test, y_test, test_lens)
-            print "Epoch %d finished. Training time: %.2f secs" % (epoch, time.time()-start_time)
-            print "Train score = %f. Valid score = %f." % (train_score, valid_score)
+            print "Epoch %d finished. Epoch training time: %.2f secs" % (epoch, time.time()-start_time)
+            print "Valid score = %f." % (valid_score)
             if x_test is not None:
                 print "Last test score = %f." % self.last_test_score
         print "OPTIMIZATION COMPLETE."
@@ -414,18 +407,19 @@ class CNNTextClassifier(BaseEstimator):
         assert len(data) > 0
         sentence_len = len(data[0])
 
-        num_batches = len(data) // self.batch_size
-        num_rest = len(data) % self.batch_size
+        num_batches = len(data) // self.init_params['batch_size']
+        num_rest = len(data) % self.init_params['batch_size']
         if num_batches > 0:
             predictions = [self.predict_wrap(self.get_batch(data, i, lengths))
                            for i in range(num_batches)]
         else:
             predictions = []
         if num_rest > 0:
-            z = np.zeros((self.batch_size, sentence_len))
-            z[0:num_rest] = data[num_batches * self.batch_size: num_batches * self.batch_size + num_rest]
+            z = np.zeros((self.init_params['batch_size'], sentence_len))
+            z[0:num_rest] = data[num_batches * self.init_params['batch_size']:
+                                 num_batches * self.init_params['batch_size'] + num_rest]
             if lengths is not None:
-                z = z[:, :lengths[num_batches * self.batch_size + num_rest - 1]]
+                z = z[:, :lengths[num_batches * self.init_params['batch_size'] + num_rest - 1]]
             predictions.append(self.predict_wrap(z)[0:num_rest])
         return np.hstack(predictions).flatten()
 
@@ -444,8 +438,8 @@ class CNNTextClassifier(BaseEstimator):
         assert len(data) > 0
         sentence_len = len(data[0])
 
-        num_batches = len(data) // self.batch_size
-        num_rest = len(data) % self.batch_size
+        num_batches = len(data) // self.init_params['batch_size']
+        num_rest = len(data) % self.init_params['batch_size']
         if num_batches > 0:
             # TODO: проверь, тут точно нужно приводить к list?
             predictions = [list(self.predict_wrap(self.get_batch(data, i, lengths)))
@@ -453,10 +447,11 @@ class CNNTextClassifier(BaseEstimator):
         else:
             predictions = []
         if num_rest > 0:
-            z = np.zeros((self.batch_size, sentence_len))
-            z[0:num_rest] = data[num_batches * self.batch_size: num_batches * self.batch_size + num_rest]
+            z = np.zeros((self.init_params['batch_size'], sentence_len))
+            z[0:num_rest] = data[num_batches * self.init_params['batch_size']:
+                                 num_batches * self.init_params['batch_size'] + num_rest]
             if lengths is not None:
-                z = z[:, :lengths[num_batches * self.batch_size + num_rest - 1]]
+                z = z[:, :lengths[num_batches * self.init_params['batch_size'] + num_rest - 1]]
             predictions.append(self.predict_wrap(z)[0:num_rest])
 
         return np.vstack(predictions)
@@ -532,25 +527,9 @@ class CNNTextClassifier(BaseEstimator):
         else:
             print "Error in function 'get_all_weights_values': there is no network yet - call 'ready' before it."
 
-    def get_params_as_string(self):
-        result_str = list()
-        result_str.append("clf_name = %s" % self.clf_name)
-        result_str.append("vocab_size = %d" % self.vocab_size)
-        result_str.append("word_dimension = %d" % self.word_dimension)
-        result_str.append("non_static = " + str(self.non_static))
+    def get_clf_init_params(self):
+        return self.init_params
 
-        result_str.append("sentence_len = " + str(self.sentence_len))
-        result_str.append("n_out = %d" % self.n_out)
+    def get_arch_params(self):
+        return self.arch_params
 
-        result_str.append("windows = " + str(self.windows))
-        result_str.append("n_filters = %s" % str(self.n_filters))
-        result_str.append("n_hidden = %d" % self.n_hidden)
-        result_str.append("k_top = %d" % self.k_top)
-        result_str.append("activation = %s" % str(self.activations))
-        result_str.append("dropout = %2f" % self.dropout)
-        result_str.append("l1_regs = %s" % str(self.l1_regs))
-        result_str.append("l2_regs = %s" % str(self.l2_regs))
-
-        result_str.append("batch_size = %d" % self.batch_size)
-        result_str.append("seed = %d" % self.seed)
-        return '\n'.join(result_str)

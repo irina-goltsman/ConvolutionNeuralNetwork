@@ -73,7 +73,6 @@ def load_amazon(data_path, max_size=None):
     return data
 
 
-# TODO:
 def load_dbpedia_data(data_path, max_size=None):
     limit = 100000
     if max_size is None:
@@ -88,9 +87,12 @@ def load_dbpedia_data(data_path, max_size=None):
         data = pd.read_csv(path, sep=',', nrows=max_size/len(classes) * 2 + shift, usecols=[2],
                            na_values='NULL')[shift:]
         data.dropna(inplace=True)
+        data.columns = ["text",]
+        data = data[data["text"].apply(dt.words_count) > 7]
+        np.random.seed(0)
+        data = data.apply(np.random.permutation)
         data = data[0:max_size/len(classes)]
         print len(data)
-        data.columns = ["text",]
         data['label'] = id
         dataset.append(data)
     return pd.concat(dataset, ignore_index=True)
@@ -116,14 +118,14 @@ def examine_dataset(data_path, load_function, max_size):
     print "vocab size: " + str(len(vocabulary))
     # print "max vocabulary value: %d" % max(word_idx_map.values())
 
-    data["length"] = data["text"].apply(dt.words_count)
+    data["length"] = data["cleared_text"].apply(dt.words_count)
     data["cleared_length"] = data["cleared_text"].apply(dt.words_count)
     print "max length of text = %d words" % max(data['length'])
     print "min lenght of text = %d words" % min(data['length'])
     print "max length of cleared text = %d words" % max(data['cleared_length'])
     print "min lenght of cleared text = %d words" % min(data['cleared_length'])
     print data.describe(percentiles=[.25, .5, .75, .8, .9, .95, .99])
-    print "example of shortest text:"
+    print "sorted by len data:"
     print data.sort_values(by="length")
 
 models = {"mr_100": "./models/100features_40minwords_10context",
@@ -158,7 +160,8 @@ if __name__ == "__main__":
                         help='Path to word embedding model.')
     parser.add_argument("--data_path", type=str, default=None, help='Path to dataset.')
     parser.add_argument("--output_path", type=str, default=None, help='Full path to output file.')
-    parser.add_argument("--examine", type=bool, default=True, help='Full path to output file.')
+    parser.add_argument("--examine", type=bool, default=False,
+                        help='Set True to show the full info (without saving)')
     args = vars(parser.parse_args())
 
     if args['data_path'] is None:

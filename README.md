@@ -1,10 +1,10 @@
 # ConvolutionNeuralNetwork
 
 Зависимые библиотеки:
-theano
-lasagne
-scikit-learn
-pandas
+theano (0.9.0dev1)
+lasagne (0.2.dev1)
+scikit-learn (0.18.dev0)
+pandas (0.18.1)
 bs4
 nltk
 gensim
@@ -17,6 +17,7 @@ data
 
 В папку data поместить распакованные датасеты
 
+http://ai.stanford.edu/~amaas/data/sentiment/
 
 Данные MR_Kaggle:
 https://www.kaggle.com/c/word2vec-nlp-tutorial/data
@@ -27,7 +28,7 @@ unzip Sentiment-Analysis-Dataset.zip
 
 DBpedia:
 chosen categories:
-Species, Person, AnatomicalStructure, Event, MeanOfTransportation, Place, Disease, Device, Work, Activity
+Species, Person, Event, Place, Device, Work
 Example: wget http://web.informatik.uni-mannheim.de/DBpediaAsTables/csv/Activity.csv.gz
 
 google 300 word2vec скачать в models и распаковать:

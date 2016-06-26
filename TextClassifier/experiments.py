@@ -25,7 +25,7 @@ def load_and_print_params(path_to_model):
     print clf.get_all_weights_values()
 
 
-def load_and_cut_data(data_file, big_dataset, need_word_idx_map=True):
+def load_and_cut_data(data_file, max_l, need_word_idx_map=True):
     print "loading data...",
     # Немного говнокода из-за разной предобработки датасетов с embedding моделью и без:
     with open(data_file, 'rb') as pickle_file:
@@ -39,11 +39,14 @@ def load_and_cut_data(data_file, big_dataset, need_word_idx_map=True):
     print "%d samples." % len(data)
 
     data["counts"] = data["text"].apply(dt.words_count)
-    if big_dataset:
-        max_l = data["counts"].quantile(0.95)
-        print "Dataset will be cut. Text's 0.95 quantile = %d words" % max_l
-    else:
+    if max_l is None:
         max_l = max(data["counts"])
+    else:
+        if isinstance(max_l, float):
+            quant = max_l
+            max_l = data["counts"].quantile(quant)
+            print "Text's %f quantile = %d words." % (quant, max_l)
+        print "Dataset will be cut to %d words." % (max_l)
 
     print "max length of text = %d words" % max(data["counts"])
     print "min lenght of text = %d words" % min(data["counts"])
@@ -69,7 +72,7 @@ def save_model(clf, saveto):
 def save_history(clf, fit_params, dataset_name, history_saveto):
     print "best_valid_score: %f, clf.best_iter_num:%f" % \
           (clf.best_valid_score, clf.best_iter_num)
-    new_res_path = '_'.join((history_saveto, dataset_name, clf.params['clf'],
+    new_res_path = '_'.join((history_saveto, dataset_name, clf.init_params['clf'],
                              datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')))
 
     best = np.array([clf.best_valid_score, clf.best_iter_num])
@@ -77,11 +80,11 @@ def save_history(clf, fit_params, dataset_name, history_saveto):
              np.asarray(clf.history_val_err), np.asarray(clf.history_train_err))
 
 
-def train_and_save_model(data_file, big_dataset, fit_params, dataset_name,
+def train_and_save_model(data_file, fit_params, dataset_name, max_l=0.95,
                          clf_params=None, architecture_params=None,
                          path_to_model=None, model_saveto=None, history_saveto=None):
     if path_to_model:
-        data = load_and_cut_data(data_file, big_dataset, need_word_idx_map=False)
+        data = load_and_cut_data(data_file, max_l, need_word_idx_map=False)
 
         clf = CNNTextClassifier()
         print "Loading state for classifier..."
@@ -89,7 +92,7 @@ def train_and_save_model(data_file, big_dataset, fit_params, dataset_name,
     else:
         assert clf_params is not None
         assert architecture_params is not None
-        data, word_idx_map, w2v_matrix = load_and_cut_data(data_file, big_dataset)
+        data, word_idx_map, w2v_matrix = load_and_cut_data(data_file, max_l)
 
         if clf_params['word_dim'] is None:
             clf_params['word_embedding'] = w2v_matrix
@@ -128,15 +131,13 @@ def train_and_save_model(data_file, big_dataset, fit_params, dataset_name,
 
 
 # available_models = ("mr_100", "google_300")
-big_dataset = {'polarity': False, 'mr_kaggle': True, 'dbpedia': True,
-               '20_news': True, 'twitter': True, 'amazon': True}
 
 if __name__ == "__main__":
     start_time = time.time()
 
     max_size = None
     model_name = None
-    dataset_name = "twitter"
+    dataset_name = "mr_kaggle"
 
     clf_params = {
                    'clf': 'lstm',
@@ -157,7 +158,7 @@ if __name__ == "__main__":
     fit_params = {
                    'n_epochs': 15,
                    'valid_freq': 50,
-                   'train_score_freq': 1000,
+                   'train_score_freq': 100,
                    'valid_proportion': 0.1,
                    'early_stop': False,
 
@@ -167,10 +168,9 @@ if __name__ == "__main__":
                  }
 
     train_and_save_model(data_file=dt.get_output_name(dataset_name, model_name, max_size),
-                         big_dataset=big_dataset[dataset_name],
                          clf_params=clf_params, fit_params=fit_params,
                          architecture_params=architecture_params,
-                         dataset_name=dataset_name,
+                         dataset_name=dataset_name, max_l=0.95,
                          history_saveto=None, #"./results/res",
                          model_saveto=None, #"./cnn_states/state_"
                          )

@@ -365,10 +365,10 @@ class CNNTextClassifier(BaseEstimator):
                         stop = True
 
                     if iter > 0 and iter % train_score_freq == 0:
-                        print "Train score calcs..."
+                        print "Train score calcs...",
                         train_score_time = time.time()
                         train_score = self.score(x_train, y_train, train_lens)
-                        print "Train score calcs finished by %2f secs" % (time.time() - train_score_time)
+                        print " Done by %2f secs" % (time.time() - train_score_time)
                         print "Train score: %f." % train_score
                         self.history_train_err.append([train_score, train_cost])
 

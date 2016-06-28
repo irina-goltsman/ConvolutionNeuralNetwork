@@ -76,7 +76,7 @@ def save_history(clf, fit_params, dataset_name, history_saveto):
                              datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')))
 
     best = np.array([clf.best_valid_score, clf.best_iter_num])
-    np.savez(new_res_path, clf.get_params, clf.get_arch_params, fit_params, best,
+    np.savez(new_res_path, best, clf.get_clf_init_params(), clf.get_arch_params(), fit_params,
              np.asarray(clf.history_val_err), np.asarray(clf.history_train_err))
 
 
@@ -127,7 +127,7 @@ def train_and_save_model(data_file, fit_params, dataset_name, max_l=0.95,
     if model_saveto:
         save_model(clf, model_saveto)
     if history_saveto:
-        save_history(clf, dataset_name=dataset_name, history_saveto=history_saveto)
+        save_history(clf, fit_params, dataset_name=dataset_name, history_saveto=history_saveto)
 
 
 # available_models = ("mr_100", "google_300")
@@ -135,9 +135,9 @@ def train_and_save_model(data_file, fit_params, dataset_name, max_l=0.95,
 if __name__ == "__main__":
     start_time = time.time()
 
-    max_size = None
+    max_size = 100000
     model_name = None
-    dataset_name = "mr_kaggle"
+    dataset_name = "dbpedia"
 
     clf_params = {
                    'clf': 'lstm',
@@ -151,19 +151,19 @@ if __name__ == "__main__":
     # Параметры, относящиеся непосредственно к архитектуре:
     # В зависимости от модели могут отличаться
     architecture_params = { # смотри networks для этих параметров
-                           'n_hidden': 100,
+                           'n_hidden': 50,
                            'dropout': 0.5,
                           }
 
     fit_params = {
-                   'n_epochs': 15,
-                   'valid_freq': 50,
+                   'n_epochs': 100,
+                   'valid_freq': 100,
                    'train_score_freq': 100,
                    'valid_proportion': 0.1,
                    'early_stop': False,
 
                    'l1_regs': list(),
-                   'l2_regs': list(),
+                   'l2_regs': (0.0001, 0.0001, 0.0001, 0.0001),
                    'update_func': adam,
                  }
 
@@ -171,7 +171,7 @@ if __name__ == "__main__":
                          clf_params=clf_params, fit_params=fit_params,
                          architecture_params=architecture_params,
                          dataset_name=dataset_name, max_l=0.95,
-                         history_saveto=None, #"./results/res",
+                         history_saveto="./results/res",
                          model_saveto=None, #"./cnn_states/state_"
                          )
 
